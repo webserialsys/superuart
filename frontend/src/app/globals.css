@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 33% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --primary: 198 93% 39%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 94%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 32% 93%;
+  --muted-foreground: 215 16% 36%;
+  --accent: 191 94% 43%;
+  --accent-foreground: 222 47% 11%;
+  --border: 215 28% 86%;
+  --input: 215 28% 86%;
+  --ring: 198 93% 39%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 98%;
+  --card: 223 43% 11%;
+  --card-foreground: 210 40% 98%;
+  --primary: 191 94% 52%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 72%;
+  --accent: 190 95% 45%;
+  --accent-foreground: 210 40% 98%;
+  --border: 217 32% 25%;
+  --input: 217 32% 25%;
+  --ring: 191 94% 52%;
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  background-image:
+    linear-gradient(to right, hsl(var(--border) / 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border) / 0.25) 1px, transparent 1px),
+    radial-gradient(circle at top left, hsl(191 94% 43% / 0.08), transparent 40%),
+    radial-gradient(circle at bottom right, hsl(217 33% 30% / 0.12), transparent 45%);
+  background-size: 24px 24px, 24px 24px, auto, auto;
+  background-attachment: fixed;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--font-mono), "Fira Code", monospace;
+}
