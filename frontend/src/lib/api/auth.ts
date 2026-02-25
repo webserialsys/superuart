@@ -6,6 +6,14 @@ type RegisterPayload = {
   email: string;
   full_name: string;
   password: string;
+  role: "student" | "teacher";
+};
+
+type CreateUserPayload = {
+  email: string;
+  full_name: string;
+  password: string;
+  role?: "student" | "teacher";
 };
 
 export async function login(email: string, password: string): Promise<TokenResponse> {
@@ -31,6 +39,14 @@ export async function refreshAccessToken(): Promise<TokenResponse> {
 export async function register(payload: RegisterPayload): Promise<User> {
   return apiRequest<User>("/api/v1/user", {
     method: "POST",
+    body: payload,
+  });
+}
+
+export async function createUser(token: string, payload: CreateUserPayload): Promise<User> {
+  return apiRequest<User>("/api/v1/user", {
+    method: "POST",
+    token,
     body: payload,
   });
 }

@@ -19,7 +19,7 @@ type AuthContextValue = {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, fullName: string, password: string) => Promise<void>;
+  register: (email: string, fullName: string, password: string, role: "student" | "teacher") => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 };
@@ -132,10 +132,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearSession]);
 
-  const register = useCallback(async (email: string, fullName: string, password: string) => {
+  const register = useCallback(async (email: string, fullName: string, password: string, role: "student" | "teacher") => {
     setIsLoading(true);
     try {
-      await registerApi({ email, full_name: fullName, password });
+      await registerApi({ email, full_name: fullName, password, role });
       await login(email, password);
     } finally {
       setIsLoading(false);

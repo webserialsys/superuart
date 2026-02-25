@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ const schema = z
     email: z.string().email("Use valid email format"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
+    role: z.enum(["student", "teacher"]),
   })
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords must match",
@@ -29,6 +31,7 @@ export function RegisterForm() {
   const router = useRouter();
   const { register, isLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<"student" | "teacher">("student");
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,6 +43,7 @@ export function RegisterForm() {
       email: formData.get("email"),
       password: formData.get("password"),
       confirmPassword: formData.get("confirmPassword"),
+      role,
     });
 
     if (!parsed.success) {
@@ -49,7 +53,7 @@ export function RegisterForm() {
     }
 
     try {
-      await register(parsed.data.email, parsed.data.fullName, parsed.data.password);
+      await register(parsed.data.email, parsed.data.fullName, parsed.data.password, parsed.data.role);
       toast.success("Account created");
       router.push("/dashboard");
     } catch (submitError) {
@@ -93,6 +97,48 @@ export function RegisterForm() {
               autoComplete="new-password"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Role</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition",
+                  role === "student"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:border-primary/60",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="role"
+                  value="student"
+                  checked={role === "student"}
+                  onChange={() => setRole("student")}
+                  className="sr-only"
+                />
+                Student
+              </label>
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition",
+                  role === "teacher"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:border-primary/60",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="role"
+                  value="teacher"
+                  checked={role === "teacher"}
+                  onChange={() => setRole("teacher")}
+                  className="sr-only"
+                />
+                Teacher
+              </label>
+            </div>
           </div>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}

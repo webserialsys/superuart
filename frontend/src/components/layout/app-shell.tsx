@@ -1,22 +1,39 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Cable, LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Cable, LayoutGrid, LogOut, Server, TerminalSquare, Users } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, teacherOnly: true },
+  { href: "/hosts", label: "Hosts", icon: Server, teacherOnly: true },
+  { href: "/students", label: "Students", icon: Users, teacherOnly: true },
   { href: "/devices", label: "Devices", icon: Cable },
-  { href: "/terminal", label: "Terminal", icon: TerminalSquare, disabled: true },
+  { href: "/terminal", label: "Terminal", icon: TerminalSquare },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    if (user?.role !== "student") {
+      return;
+    }
+
+    const normalized = pathname || "";
+    const allowed = normalized === "/devices" || normalized.startsWith("/devices/") || normalized === "/terminal" || normalized.startsWith("/terminal/");
+
+    if (!allowed) {
+      router.replace("/devices");
+    }
+  }, [pathname, router, user?.role]);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(8,145,178,0.16),transparent_50%),radial-gradient(circle_at_bottom_left,rgba(15,23,42,0.12),transparent_45%)]">
@@ -28,7 +45,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="space-y-1">
-            {navigation.map((item) => {
+            {navigation
+              .filter((item) => !item.teacherOnly || user?.role === "teacher")
+              .map((item) => {
               const active = pathname === item.href;
               const Icon = item.icon;
 
