@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import Response
 
-from src.app.api.dependencies import get_current_user
+from src.app.api.dependencies import get_current_user, require_roles
 from src.app.api.v1.login import login_for_access_token, refresh_access_token
-from src.app.core.exceptions.http_exceptions import UnauthorizedException
+from src.app.core.exceptions.http_exceptions import ForbiddenException, UnauthorizedException
 from src.app.core.schemas import TokenData
+from src.app.models.enums import UserRole
 
 
 class TestLoginForAccessToken:
@@ -121,3 +122,45 @@ class TestGetCurrentUser:
 
             with pytest.raises(UnauthorizedException, match="User not authenticated."):
                 await get_current_user(token, mock_db)
+
+    @pytest.mark.asyncio
+    async def test_get_current_user_missing_user(self, mock_db):
+        """Raise UnauthorizedException when user does not exist."""
+        token = "access-token"
+
+        with patch("src.app.api.dependencies.verify_token", new_callable=AsyncMock) as mock_verify:
+            mock_verify.return_value = TokenData(email="user@example.com")
+
+            with patch("src.app.api.dependencies.crud_users") as mock_crud:
+                mock_crud.get = AsyncMock(return_value=None)
+
+                with pytest.raises(UnauthorizedException, match="User not authenticated."):
+                    await get_current_user(token, mock_db)
+
+
+class TestRequireRoles:
+    """Test require_roles dependency helper."""
+
+    @pytest.mark.asyncio
+    async def test_require_roles_allows_teacher(self):
+        checker = require_roles(UserRole.TEACHER)
+        current_user = {"role": UserRole.TEACHER}
+
+        result = await checker(current_user)
+        assert result == current_user
+
+    @pytest.mark.asyncio
+    async def test_require_roles_allows_superuser(self):
+        checker = require_roles(UserRole.TEACHER)
+        current_user = {"role": UserRole.STUDENT, "is_superuser": True}
+
+        result = await checker(current_user)
+        assert result == current_user
+
+    @pytest.mark.asyncio
+    async def test_require_roles_forbids_student(self):
+        checker = require_roles(UserRole.TEACHER)
+        current_user = {"role": UserRole.STUDENT}
+
+        with pytest.raises(ForbiddenException):
+            await checker(current_user)

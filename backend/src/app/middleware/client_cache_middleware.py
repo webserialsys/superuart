@@ -52,5 +52,15 @@ class ClientCacheMiddleware(BaseHTTPMiddleware):
             - This method is automatically called by Starlette for processing the request-response cycle.
         """
         response: Response = await call_next(request)
-        response.headers["Cache-Control"] = f"public, max-age={self.max_age}"
+
+        # Avoid caching API responses to prevent stale data after mutations.
+        if request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-store"
+            return response
+
+        # Only cache safe, public GET responses.
+        if request.method.upper() == "GET":
+            response.headers["Cache-Control"] = f"public, max-age={self.max_age}"
+        else:
+            response.headers["Cache-Control"] = "no-store"
         return response

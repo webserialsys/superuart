@@ -8,6 +8,7 @@ from ..core.exceptions.http_exceptions import ForbiddenException, UnauthorizedEx
 from ..core.logger import logging
 from ..core.security import TokenType, oauth2_scheme, verify_token
 from ..crud.crud_users import crud_users
+from ..models.enums import UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,22 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(async_g
 
 
 async def get_current_superuser(current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
-    if not current_user.get("is_superuser", False):
+    if current_user.get("is_superuser", False):
+        return current_user
+    raise ForbiddenException("You do not have enough privileges.")
+
+
+def require_roles(*roles: UserRole) -> callable:
+    role_values = {role.value for role in roles}
+
+    async def _require(current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
+        role = current_user.get("role")
+        if current_user.get("is_superuser", False):
+            return current_user
+
+        if role in role_values or role in roles:
+            return current_user
+
         raise ForbiddenException("You do not have enough privileges.")
 
-    return current_user
+    return _require

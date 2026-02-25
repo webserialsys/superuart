@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, Request
 from fastcrud import PaginatedListResponse, compute_offset, paginated_response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...api.dependencies import get_current_superuser, get_current_user
+from ...api.dependencies import get_current_superuser, get_current_user, require_roles
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
 from ...core.security import blacklist_token, get_password_hash, oauth2_scheme
 from ...crud.crud_users import crud_users
+from ...models.enums import UserRole
 from ...schemas.user import UserCreate, UserCreateInternal, UserRead, UserUpdate
 
 router = APIRouter(tags=["users"])
@@ -35,7 +36,7 @@ async def write_user(
     return created_user
 
 
-@router.get("/users", response_model=PaginatedListResponse[UserRead])
+@router.get("/users", response_model=PaginatedListResponse[UserRead], dependencies=[Depends(require_roles(UserRole.TEACHER))])
 async def read_users(
     request: Request, db: Annotated[AsyncSession, Depends(async_get_db)], page: int = 1, items_per_page: int = 10
 ) -> dict:
@@ -44,6 +45,7 @@ async def read_users(
         offset=compute_offset(page, items_per_page),
         limit=items_per_page,
         is_deleted=False,
+        schema_to_select=UserRead,
     )
 
     response: dict[str, Any] = paginated_response(crud_data=users_data, page=page, items_per_page=items_per_page)
@@ -57,8 +59,16 @@ async def read_users_me(request: Request, current_user: Annotated[dict, Depends(
 
 @router.get("/user/{email}", response_model=UserRead)
 async def read_user(
-    request: Request, email: str, db: Annotated[AsyncSession, Depends(async_get_db)]
+    request: Request,
+    email: str,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, Any]:
+    role = current_user.get("role")
+    is_teacher = role == UserRole.TEACHER or role == UserRole.TEACHER.value
+    if not current_user.get("is_superuser", False) and not is_teacher and current_user.get("email") != email:
+        raise ForbiddenException()
+
     db_user = await crud_users.get(db=db, email=email, is_deleted=False, schema_to_select=UserRead)
     if db_user is None:
         raise NotFoundException("User not found")

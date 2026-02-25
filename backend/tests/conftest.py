@@ -87,8 +87,11 @@ def sample_user_read():
 @pytest.fixture
 def current_user_dict():
     """Mock current user from auth dependency."""
+    from src.app.models.enums import UserRole
+
     return {
         "uuid": "01950a71-4f98-7d34-b5b5-8f6f8c2c0e4a",
         "email": fake.email(),
         "full_name": fake.name(),
+        "role": UserRole.STUDENT,
     }

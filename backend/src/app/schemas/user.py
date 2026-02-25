@@ -4,6 +4,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from ..core.schemas import PersistentDeletion, TimestampSchema, UUIDSchema
+from ..models.enums import UserRole
 
 
 class UserBase(BaseModel):
@@ -11,15 +12,19 @@ class UserBase(BaseModel):
     full_name: Annotated[str, Field(min_length=2, max_length=100, examples=["User Userson"])]
 
 
-class User(TimestampSchema, UserBase, UUIDSchema, PersistentDeletion):
+class UserRoleSchema(BaseModel):
+    role: Annotated[UserRole, Field(default=UserRole.STUDENT, examples=["student"])]
+
+
+class User(TimestampSchema, UserBase, UUIDSchema, UserRoleSchema, PersistentDeletion):
     hashed_password: str
 
 
-class UserRead(TimestampSchema, UserBase, UUIDSchema):
+class UserRead(TimestampSchema, UserBase, UUIDSchema, UserRoleSchema):
     pass
 
 
-class UserCreate(UserBase):
+class UserCreate(UserBase, UserRoleSchema):
     model_config = ConfigDict(extra="forbid")
 
     password: Annotated[str, Field(min_length=8, examples=["Qwerty123!"])]
@@ -27,6 +32,7 @@ class UserCreate(UserBase):
 
 class UserCreateInternal(UserBase):
     hashed_password: str
+    role: UserRole = UserRole.STUDENT
 
 
 class UserUpdate(BaseModel):
