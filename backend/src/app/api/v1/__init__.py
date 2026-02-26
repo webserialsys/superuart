@@ -9,6 +9,7 @@ from .logout import router as logout_router
 from .sessions import router as sessions_router
 from .tasks import router as tasks_router
 from .users import router as users_router
+from .ws_uart_mock import router as ws_uart_mock_router
 
 router = APIRouter(prefix="/v1")
 router.include_router(health_router)
@@ -20,3 +21,4 @@ router.include_router(devices_router)
 router.include_router(hosts_router)
 router.include_router(sessions_router)
 router.include_router(access_router)
+router.include_router(ws_uart_mock_router)

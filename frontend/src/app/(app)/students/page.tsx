@@ -68,6 +68,7 @@ export default function StudentsPage() {
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
   const [studentError, setStudentError] = useState<string | null>(null);
   const [studentMessage, setStudentMessage] = useState<string | null>(null);
   const [isCreatingStudent, setIsCreatingStudent] = useState(false);
@@ -615,10 +616,21 @@ export default function StudentsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="student-password">Password</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="student-password">Password</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto px-2 py-1 text-xs"
+                onClick={() => setShowStudentPassword((prev) => !prev)}
+              >
+                {showStudentPassword ? "Hide" : "Show"}
+              </Button>
+            </div>
             <Input
               id="student-password"
-              type="password"
+              type={showStudentPassword ? "text" : "password"}
               value={studentPassword}
               onChange={(event) => setStudentPassword(event.target.value)}
               placeholder="Minimum 8 characters"

@@ -30,6 +30,8 @@ function statusVariant(status: DeviceStatus): "success" | "warning" | "danger" {
   return "danger";
 }
 
+const UART_BAUDRATE_OPTIONS = ["9600", "19200", "38400", "57600", "115200"] as const;
+
 export default function DevicesPage() {
   const { token, user } = useAuth();
   const router = useRouter();
@@ -43,7 +45,6 @@ export default function DevicesPage() {
   const [deviceName, setDeviceName] = useState("");
   const [devicePort, setDevicePort] = useState("");
   const [deviceBaudrate, setDeviceBaudrate] = useState("115200");
-  const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>("AVAILABLE");
   const [deviceHostUuid, setDeviceHostUuid] = useState("");
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
@@ -149,13 +150,12 @@ export default function DevicesPage() {
         name: deviceName,
         port: devicePort,
         baudrate: Number(deviceBaudrate || "115200"),
-        status: deviceStatus,
+        status: "AVAILABLE",
         host_uuid: deviceHostUuid,
       });
       setDeviceName("");
       setDevicePort("");
       setDeviceBaudrate("115200");
-      setDeviceStatus("AVAILABLE");
       await fetchTeacherData();
       setIsDeviceModalOpen(false);
     } catch (err) {
@@ -447,33 +447,23 @@ export default function DevicesPage() {
                     required
                   />
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="device-baudrate">Baudrate</Label>
-                    <Input
-                      id="device-baudrate"
-                      type="number"
-                      min="300"
-                      value={deviceBaudrate}
-                      onChange={(event) => setDeviceBaudrate(event.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="device-status">Status</Label>
-                    <select
-                      id="device-status"
-                      value={deviceStatus}
-                      onChange={(event) => setDeviceStatus(event.target.value as DeviceStatus)}
-                      className={cn(
-                        "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      )}
-                    >
-                      <option value="AVAILABLE">AVAILABLE</option>
-                      <option value="BUSY">BUSY</option>
-                      <option value="OFFLINE">OFFLINE</option>
-                    </select>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="device-baudrate">Baudrate</Label>
+                  <select
+                    id="device-baudrate"
+                    value={deviceBaudrate}
+                    onChange={(event) => setDeviceBaudrate(event.target.value)}
+                    className={cn(
+                      "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    )}
+                    required
+                  >
+                    {UART_BAUDRATE_OPTIONS.map((baudrate) => (
+                      <option key={baudrate} value={baudrate}>
+                        {baudrate}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="device-host">Host</Label>

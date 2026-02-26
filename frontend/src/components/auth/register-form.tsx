@@ -32,6 +32,7 @@ export function RegisterForm() {
   const { register, isLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<"student" | "teacher">("student");
+  const [showPasswords, setShowPasswords] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,8 +85,25 @@ export function RegisterForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" autoComplete="new-password" required />
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto px-2 py-1 text-xs"
+                onClick={() => setShowPasswords((prev) => !prev)}
+              >
+                {showPasswords ? "Hide" : "Show"}
+              </Button>
+            </div>
+            <Input
+              id="password"
+              name="password"
+              type={showPasswords ? "text" : "password"}
+              autoComplete="new-password"
+              required
+            />
           </div>
 
           <div className="space-y-2">
@@ -93,7 +111,7 @@ export function RegisterForm() {
             <Input
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
+              type={showPasswords ? "text" : "password"}
               autoComplete="new-password"
               required
             />
