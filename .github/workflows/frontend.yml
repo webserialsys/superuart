@@ -39,8 +39,6 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies
-
       - name: Run tests with coverage
         run: bun run test:coverage
 
