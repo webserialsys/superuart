@@ -15,6 +15,7 @@ class DeviceStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
     BUSY = "BUSY"
     OFFLINE = "OFFLINE"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 class SessionStatus(str, Enum):

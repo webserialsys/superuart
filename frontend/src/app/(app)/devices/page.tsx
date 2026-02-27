@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Cable, Cpu, TerminalSquare } from "lucide-react";
+import { Cable, TerminalSquare } from "lucide-react";
+import { toast } from "sonner";
 
 import type { Device, DeviceStatus, Host } from "@/types/api";
 import { createDevice, listAvailableDevices, listDevices, updateDevice } from "@/lib/api/devices";
@@ -30,8 +31,6 @@ function statusVariant(status: DeviceStatus): "success" | "warning" | "danger" {
   return "danger";
 }
 
-const UART_BAUDRATE_OPTIONS = ["9600", "19200", "38400", "57600", "115200"] as const;
-
 export default function DevicesPage() {
   const { token, user } = useAuth();
   const router = useRouter();
@@ -44,20 +43,43 @@ export default function DevicesPage() {
 
   const [deviceName, setDeviceName] = useState("");
   const [devicePort, setDevicePort] = useState("");
-  const [deviceBaudrate, setDeviceBaudrate] = useState("115200");
   const [deviceHostUuid, setDeviceHostUuid] = useState("");
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editDevicePort, setEditDevicePort] = useState("");
-  const [editDeviceBaudrate, setEditDeviceBaudrate] = useState("115200");
-  const [editDeviceStatus, setEditDeviceStatus] = useState<DeviceStatus>("AVAILABLE");
   const [editDeviceHostUuid, setEditDeviceHostUuid] = useState("");
   const [editDeviceError, setEditDeviceError] = useState<string | null>(null);
   const [isUpdatingDevice, setIsUpdatingDevice] = useState(false);
+  const [togglingDevices, setTogglingDevices] = useState<Record<string, boolean>>({});
+  const previousStatusesRef = useRef<Map<string, DeviceStatus>>(new Map());
 
   const canManage = useMemo(() => user?.role === "teacher", [user?.role]);
   const hostLookup = useMemo(() => new Map(hosts.map((host) => [host.uuid, host])), [hosts]);
+  const applyStableDeviceOrder = useCallback((incoming: Device[]) => {
+    setDevices((previous) => {
+      if (previous.length === 0) {
+        return incoming;
+      }
+
+      const previousOrder = new Map(previous.map((device, index) => [device.uuid, index]));
+      return [...incoming].sort((left, right) => {
+        const leftIndex = previousOrder.get(left.uuid);
+        const rightIndex = previousOrder.get(right.uuid);
+
+        if (leftIndex === undefined && rightIndex === undefined) {
+          return 0;
+        }
+        if (leftIndex === undefined) {
+          return 1;
+        }
+        if (rightIndex === undefined) {
+          return -1;
+        }
+        return leftIndex - rightIndex;
+      });
+    });
+  }, []);
 
   const fetchTeacherData = useCallback(async () => {
     if (!token) {
@@ -65,18 +87,18 @@ export default function DevicesPage() {
     }
 
     const [devicesResult, hostsResult] = await Promise.all([listDevices(token), listHosts(token)]);
-    setDevices(devicesResult.data ?? []);
+    applyStableDeviceOrder(devicesResult.data ?? []);
     setHosts(hostsResult.data ?? []);
 
     if (!deviceHostUuid && hostsResult.data?.length) {
       setDeviceHostUuid(hostsResult.data[0].uuid);
     }
-  }, [token, deviceHostUuid]);
+  }, [token, deviceHostUuid, applyStableDeviceOrder]);
 
   const handleConnect = useCallback(
     (device: Device) => {
       const nameParam = encodeURIComponent(device.name);
-      router.push(`/terminal?device=${device.uuid}&name=${nameParam}`);
+      router.push(`/terminal?device=${device.uuid}&name=${nameParam}&baudrate=${device.baudrate}`);
     },
     [router],
   );
@@ -97,8 +119,6 @@ export default function DevicesPage() {
     setEditingDevice(device);
     setEditDeviceName(device.name);
     setEditDevicePort(device.port);
-    setEditDeviceBaudrate(String(device.baudrate));
-    setEditDeviceStatus(device.status);
     setEditDeviceHostUuid(device.host_uuid);
     setEditDeviceError(null);
     setIsDeviceModalOpen(true);
@@ -121,7 +141,7 @@ export default function DevicesPage() {
           await fetchTeacherData();
         } else {
           const result = await listAvailableDevices(token);
-          setDevices(result);
+          applyStableDeviceOrder(result);
         }
       } catch (err) {
         if (err instanceof ApiError) {
@@ -135,7 +155,45 @@ export default function DevicesPage() {
     };
 
     void fetchDevices();
-  }, [token, canManage, fetchTeacherData]);
+  }, [token, canManage, fetchTeacherData, applyStableDeviceOrder]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        if (canManage) {
+          await fetchTeacherData();
+        } else {
+          const result = await listAvailableDevices(token);
+          applyStableDeviceOrder(result);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    const interval = window.setInterval(poll, 10000);
+    return () => window.clearInterval(interval);
+  }, [token, canManage, fetchTeacherData, applyStableDeviceOrder]);
+
+  useEffect(() => {
+    const previous = previousStatusesRef.current;
+    if (previous.size > 0) {
+      devices.forEach((device) => {
+        const lastStatus = previous.get(device.uuid);
+        if (lastStatus === "AVAILABLE" && device.status === "BUSY") {
+          toast.warning(`${device.name} is now busy.`);
+        }
+      });
+    }
+
+    const next = new Map<string, DeviceStatus>();
+    devices.forEach((device) => next.set(device.uuid, device.status));
+    previousStatusesRef.current = next;
+  }, [devices]);
 
   const handleCreateDevice = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -149,13 +207,10 @@ export default function DevicesPage() {
       await createDevice(token, {
         name: deviceName,
         port: devicePort,
-        baudrate: Number(deviceBaudrate || "115200"),
-        status: "AVAILABLE",
         host_uuid: deviceHostUuid,
       });
       setDeviceName("");
       setDevicePort("");
-      setDeviceBaudrate("115200");
       await fetchTeacherData();
       setIsDeviceModalOpen(false);
     } catch (err) {
@@ -181,8 +236,6 @@ export default function DevicesPage() {
       await updateDevice(token, editingDevice.uuid, {
         name: editDeviceName,
         port: editDevicePort,
-        baudrate: Number(editDeviceBaudrate || "115200"),
-        status: editDeviceStatus,
         host_uuid: editDeviceHostUuid,
       });
       await fetchTeacherData();
@@ -195,6 +248,31 @@ export default function DevicesPage() {
       }
     } finally {
       setIsUpdatingDevice(false);
+    }
+  };
+
+  const handleToggleDeviceEnabled = async (device: Device, isEnabled: boolean) => {
+    if (!token || !canManage) {
+      return;
+    }
+
+    setTogglingDevices((prev) => ({ ...prev, [device.uuid]: true }));
+    try {
+      await updateDevice(token, device.uuid, { is_enabled: isEnabled });
+      await fetchTeacherData();
+      toast.success(isEnabled ? `${device.name} activated.` : `${device.name} deactivated.`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.detail);
+      } else {
+        toast.error("Unable to change board activation.");
+      }
+    } finally {
+      setTogglingDevices((prev) => {
+        const next = { ...prev };
+        delete next[device.uuid];
+        return next;
+      });
     }
   };
 
@@ -249,14 +327,16 @@ export default function DevicesPage() {
                   <TableHead>Port</TableHead>
                   <TableHead>Baudrate</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Occupied by</TableHead>
                   <TableHead>Host</TableHead>
+                  <TableHead>Active</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {devices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       No devices available.
                     </TableCell>
                   </TableRow>
@@ -270,9 +350,29 @@ export default function DevicesPage() {
                         <Badge variant={statusVariant(device.status)}>{device.status}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
+                        {device.status === "BUSY" ? device.occupied_by_label ?? "Unknown user" : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
                         {device.host_uuid
                           ? hostLookup.get(device.host_uuid)?.name ?? `${device.host_uuid.slice(0, 8)}…`
                           : "unassigned"}
+                      </TableCell>
+                      <TableCell>
+                        {canManage ? (
+                          <label className="relative inline-flex cursor-pointer items-center">
+                            <input
+                              type="checkbox"
+                              className="peer sr-only"
+                              checked={device.status !== "UNAVAILABLE"}
+                              disabled={Boolean(togglingDevices[device.uuid])}
+                              onChange={(event) => void handleToggleDeviceEnabled(device, event.target.checked)}
+                            />
+                            <span className="h-6 w-11 rounded-full bg-muted transition peer-checked:bg-emerald-600" />
+                            <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+                          </label>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {canManage ? (
@@ -287,8 +387,8 @@ export default function DevicesPage() {
                             </Button>
                             <Button
                               size="sm"
-                              variant={device.status === "AVAILABLE" ? "default" : "outline"}
-                              disabled={device.status !== "AVAILABLE"}
+                              variant={device.status === "AVAILABLE" || device.occupied_by_you ? "default" : "outline"}
+                              disabled={device.status !== "AVAILABLE" && !device.occupied_by_you}
                               type="button"
                               onClick={() => handleConnect(device)}
                             >
@@ -299,8 +399,8 @@ export default function DevicesPage() {
                         ) : (
                           <Button
                             size="sm"
-                            variant={device.status === "AVAILABLE" ? "default" : "outline"}
-                            disabled={device.status !== "AVAILABLE"}
+                            variant={device.status === "AVAILABLE" || device.occupied_by_you ? "default" : "outline"}
+                            disabled={device.status !== "AVAILABLE" && !device.occupied_by_you}
                             type="button"
                             onClick={() => handleConnect(device)}
                           >
@@ -350,34 +450,6 @@ export default function DevicesPage() {
                   placeholder="/dev/ttyUSB0"
                   required
                 />
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-device-baudrate">Baudrate</Label>
-                  <Input
-                    id="edit-device-baudrate"
-                    type="number"
-                    min="300"
-                    value={editDeviceBaudrate}
-                    onChange={(event) => setEditDeviceBaudrate(event.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-device-status">Status</Label>
-                  <select
-                    id="edit-device-status"
-                    value={editDeviceStatus}
-                    onChange={(event) => setEditDeviceStatus(event.target.value as DeviceStatus)}
-                    className={cn(
-                      "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
-                  >
-                    <option value="AVAILABLE">AVAILABLE</option>
-                    <option value="BUSY">BUSY</option>
-                    <option value="OFFLINE">OFFLINE</option>
-                  </select>
-                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-device-host">Host</Label>
@@ -448,24 +520,6 @@ export default function DevicesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="device-baudrate">Baudrate</Label>
-                  <select
-                    id="device-baudrate"
-                    value={deviceBaudrate}
-                    onChange={(event) => setDeviceBaudrate(event.target.value)}
-                    className={cn(
-                      "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
-                    required
-                  >
-                    {UART_BAUDRATE_OPTIONS.map((baudrate) => (
-                      <option key={baudrate} value={baudrate}>
-                        {baudrate}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="device-host">Host</Label>
                   <select
                     id="device-host"
@@ -503,20 +557,6 @@ export default function DevicesPage() {
           )}
         </Modal>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Cpu className="h-4 w-4 text-primary" />
-            Expansion notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. add booking workflow and status locking for `BUSY` transitions.</p>
-          <p>2. integrate xterm.js terminal route and WebSocket transport for UART streams.</p>
-          <p>3. expose teacher CRUD actions once UI design is finalized.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

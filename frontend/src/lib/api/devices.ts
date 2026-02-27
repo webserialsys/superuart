@@ -1,4 +1,4 @@
-import type { Device, DeviceStatus, PaginatedResponse } from "@/types/api";
+import type { Device, PaginatedResponse } from "@/types/api";
 
 import { apiRequest } from "./client";
 
@@ -28,8 +28,6 @@ export async function listAvailableDevices(token: string): Promise<Device[]> {
 type DevicePayload = {
   name: string;
   port: string;
-  baudrate: number;
-  status: DeviceStatus;
   host_uuid: string;
 };
 
@@ -41,7 +39,9 @@ export async function createDevice(token: string, payload: DevicePayload): Promi
   });
 }
 
-type DeviceUpdatePayload = Partial<DevicePayload>;
+type DeviceUpdatePayload = Partial<DevicePayload> & {
+  is_enabled?: boolean;
+};
 
 export async function updateDevice(
   token: string,

@@ -5,6 +5,8 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: "Segoe UI", "Inter", sans-serif;
+  --font-mono: "SFMono-Regular", "Fira Code", monospace;
   --background: 210 33% 98%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;

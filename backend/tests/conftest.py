@@ -1,6 +1,6 @@
 from collections.abc import Callable, Generator
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from faker import Faker
@@ -25,7 +25,14 @@ fake = Faker()
 
 @pytest.fixture(scope="session")
 def client() -> Generator[TestClient, Any, None]:
-    with TestClient(app) as _client:
+    with (
+        patch("src.app.core.setup.create_redis_cache_pool", AsyncMock()),
+        patch("src.app.core.setup.create_redis_queue_pool", AsyncMock()),
+        patch("src.app.core.setup.close_redis_cache_pool", AsyncMock()),
+        patch("src.app.core.setup.close_redis_queue_pool", AsyncMock()),
+        patch("src.app.core.setup.create_tables", AsyncMock()),
+        TestClient(app) as _client,
+    ):
         yield _client
     app.dependency_overrides = {}
     sync_engine.dispose()

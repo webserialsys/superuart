@@ -20,7 +20,7 @@ depends_on = None
 def upgrade() -> None:
     user_role = postgresql.ENUM("student", "teacher", name="user_role", create_type=False)
     host_status = postgresql.ENUM("ONLINE", "OFFLINE", name="host_status", create_type=False)
-    device_status = postgresql.ENUM("AVAILABLE", "BUSY", "OFFLINE", name="device_status", create_type=False)
+    device_status = postgresql.ENUM("AVAILABLE", "BUSY", "OFFLINE", "UNAVAILABLE", name="device_status", create_type=False)
     session_status = postgresql.ENUM("ACTIVE", "CLOSED", "EXPIRED", name="session_status", create_type=False)
 
     bind = op.get_bind()
