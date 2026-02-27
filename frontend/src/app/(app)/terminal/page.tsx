@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Cable, TerminalSquare, Zap } from "lucide-react";
@@ -7,19 +8,29 @@ import { Cable, TerminalSquare, Zap } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { XtermPanel } from "@/components/terminal/xterm-panel";
+import { getBaudrateOptions, normalizeBaudrate } from "@/lib/uart";
+import { cn } from "@/lib/utils";
 
 export default function TerminalPage() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const deviceName = searchParams.get("name");
   const deviceId = searchParams.get("device");
+  const initialBaudrate = useMemo(() => normalizeBaudrate(searchParams.get("baudrate")), [searchParams]);
+  const [baudrate, setBaudrate] = useState(initialBaudrate);
+  const baudrateOptions = useMemo(() => getBaudrateOptions(baudrate), [baudrate]);
   const roleLabel = user?.role === "teacher" ? "Teacher mode" : "Student mode";
   const sessionLabel = deviceName?.trim()
     ? deviceName
     : deviceId
       ? `Device ${deviceId.slice(0, 8)}`
       : null;
+
+  useEffect(() => {
+    setBaudrate(initialBaudrate);
+  }, [initialBaudrate]);
 
   return (
     <div className="space-y-6">
@@ -57,7 +68,25 @@ export default function TerminalPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <XtermPanel deviceName={deviceName} deviceId={deviceId} />
+          <div className="mb-4 space-y-2 sm:max-w-xs">
+            <Label htmlFor="terminal-baudrate">Baudrate</Label>
+            <select
+              id="terminal-baudrate"
+              value={baudrate}
+              onChange={(event) => setBaudrate(event.target.value)}
+              className={cn(
+                "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            >
+              {baudrateOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">Changing baudrate reconnects the mock stream.</p>
+          </div>
+          <XtermPanel deviceName={deviceName} deviceId={deviceId} baudrate={baudrate} />
         </CardContent>
       </Card>
 

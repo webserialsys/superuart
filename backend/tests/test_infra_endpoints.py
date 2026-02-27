@@ -8,7 +8,10 @@ from jose import JWTError
 from src.app.api.v1.health import health, ready
 from src.app.api.v1.logout import logout
 from src.app.api.v1.tasks import create_task, get_task
+from src.app.core.db.database import async_get_db
+from src.app.core.utils.cache import async_get_redis
 from src.app.core.exceptions.http_exceptions import UnauthorizedException
+from src.app.main import app
 
 
 @pytest.mark.asyncio
@@ -164,21 +167,37 @@ async def test_get_task_returns_job_info_dict():
     assert result == job_info.__dict__
 
 
-def test_ws_uart_mock_stream_and_echo(client):
-    with client.websocket_connect("/api/v1/ws/uart/test-device") as websocket:
-        first = websocket.receive_text()
-        second = websocket.receive_text()
+def test_ws_uart_mock_stream_and_echo(client, mock_redis, mock_db):
+    from uuid6 import uuid7
 
-        assert "Connected to mock UART: test-device" in first
-        assert "Mock stream started" in second
+    device_uuid = uuid7()
+    connection_id = uuid7()
+    mock_redis.get = AsyncMock(
+        return_value=f'{{"connection_id":"{connection_id}","user_uuid":"{uuid7()}"}}',
+    )
 
-        websocket.send_text("ping")
+    app.dependency_overrides[async_get_redis] = lambda: mock_redis
+    app.dependency_overrides[async_get_db] = lambda: mock_db
+    try:
+        with client.websocket_connect(
+            f"/api/v1/ws/uart/{device_uuid}?connection_id={connection_id}",
+        ) as websocket:
+            first = websocket.receive_text()
+            second = websocket.receive_text()
 
-        seen_echo = False
-        for _ in range(4):
-            message = websocket.receive_text()
-            if message.startswith("echo> ping"):
-                seen_echo = True
-                break
+            assert f"Connected to mock UART: {device_uuid}" in first
+            assert "Mock stream started" in second
 
-        assert seen_echo, "Expected echo response from mock UART websocket"
+            websocket.send_text("ping")
+
+            seen_echo = False
+            for _ in range(4):
+                message = websocket.receive_text()
+                if message.startswith("echo> ping"):
+                    seen_echo = True
+                    break
+
+            assert seen_echo, "Expected echo response from mock UART websocket"
+    finally:
+        app.dependency_overrides.pop(async_get_redis, None)
+        app.dependency_overrides.pop(async_get_db, None)

@@ -12,7 +12,7 @@ export type User = {
   updated_at: string | null;
 };
 
-export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE";
+export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE" | "UNAVAILABLE";
 
 export type HostStatus = "ONLINE" | "OFFLINE";
 
@@ -37,6 +37,11 @@ export type Device = {
   baudrate: number;
   status: DeviceStatus;
   host_uuid: string;
+  occupied_by_user_uuid?: string | null;
+  occupied_by_label?: string | null;
+  occupied_by_you?: boolean;
+  active_session_uuid?: string | null;
+  active_session_expires_at?: string | null;
   created_at: string;
   updated_at: string | null;
 };

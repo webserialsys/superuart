@@ -24,12 +24,28 @@ class DeviceRead(DeviceBase, UUIDSchema, TimestampSchema):
     pass
 
 
+class DeviceAvailabilityRead(DeviceRead):
+    occupied_by_user_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
+    occupied_by_label: Annotated[str | None, Field(default=None)]
+    occupied_by_you: Annotated[bool, Field(default=False)]
+    active_session_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
+    active_session_expires_at: Annotated[datetime | None, Field(default=None)]
+
+
 class DeviceCreate(DeviceBase):
     model_config = ConfigDict(extra="forbid")
 
 
 class DeviceCreateInternal(DeviceBase):
     pass
+
+
+class DeviceTeacherCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, Field(min_length=2, max_length=120, examples=["STM32 Nucleo F401"])]
+    port: Annotated[str, Field(min_length=2, max_length=120, examples=["/dev/ttyUSB0"])]
+    host_uuid: Annotated[uuid_pkg.UUID, Field(examples=["01950a71-4f98-7d34-b5b5-8f6f8c2c0e4a"])]
 
 
 class DeviceUpdate(BaseModel):
@@ -44,6 +60,15 @@ class DeviceUpdate(BaseModel):
 
 class DeviceUpdateInternal(DeviceUpdate):
     updated_at: datetime
+
+
+class DeviceTeacherUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
+    port: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
+    host_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
+    is_enabled: Annotated[bool | None, Field(default=None)]
 
 
 class DeviceDelete(BaseModel):

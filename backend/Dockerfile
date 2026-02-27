@@ -56,7 +56,10 @@ FROM runtime-base AS production
 
 # Copy production virtual environment (without dev dependencies)
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --chown=app:app docker-entrypoint.sh /code/docker-entrypoint.sh
+RUN chmod +x /code/docker-entrypoint.sh
 
 # -------- replace with comment to run with gunicorn --------
+ENTRYPOINT ["/code/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 # CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
