@@ -9,16 +9,16 @@ Frontend for the Super UART project, built with Next.js, Tailwind CSS and shadcn
 - shadcn/ui primitives
 - Native fetch API client with typed wrappers
 
-## Implemented pages
+## Pages
 
 - `/` landing page
-- `/login` auth form (`POST /api/v1/login`)
-- `/register` user registration (`POST /api/v1/user`)
-- `/dashboard` protected page with:
-  - current user (`GET /api/v1/user/me/`)
-  - service health (`GET /api/v1/health`)
-  - async task sandbox (`POST /api/v1/tasks/task`, `GET /api/v1/tasks/task/{id}`)
-- `/devices` protected scaffold page for future device CRUD + terminal flows
+- `/login` sign in
+- `/register` user registration
+- `/dashboard` authenticated workspace overview
+- `/hosts` teacher view for host inventory and access control
+- `/students` teacher view for student account and permissions management
+- `/devices` role-aware device list and management
+- `/terminal` UART session screen
 
 ## Environment
 
@@ -35,14 +35,14 @@ bun install
 bun run dev
 ```
 
-## Notes on backend integration
+## Build and test
+
+```bash
+bun run test
+bun run build
+```
+
+## Integration notes
 
 - Access token is stored in `localStorage` and sent as `Bearer` header.
-- Refresh endpoint is integrated (`POST /api/v1/refresh`), but backend currently sets refresh cookie with `secure=true`.
-- In plain HTTP local dev, browser may not store secure cookie, so refresh flow can be limited until HTTPS is enabled.
-
-## Extension points
-
-1. Replace mocked device table with real API calls when backend device endpoints are added.
-2. Add role-aware UI gates for student/teacher workflows.
-3. Add xterm.js route and WebSocket transport for UART stream.
+- Backend API base URL is configured through `NEXT_PUBLIC_API_BASE_URL`.

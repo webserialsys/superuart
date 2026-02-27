@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Cable, Cpu, TerminalSquare } from "lucide-react";
+import { Cable, TerminalSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import type { Device, DeviceStatus, Host } from "@/types/api";
@@ -557,20 +557,6 @@ export default function DevicesPage() {
           )}
         </Modal>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Cpu className="h-4 w-4 text-primary" />
-            Expansion notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. add booking workflow and status locking for `BUSY` transitions.</p>
-          <p>2. integrate xterm.js terminal route and WebSocket transport for UART streams.</p>
-          <p>3. expose teacher CRUD actions once UI design is finalized.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

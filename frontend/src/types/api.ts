@@ -71,12 +71,6 @@ export type ReadyResponse = {
   timestamp: string;
 };
 
-export type TaskCreateResponse = {
-  id: string;
-};
-
-export type TaskInfoResponse = Record<string, unknown> | null;
-
 export type PaginatedResponse<T> = {
   data: T[];
   total_count?: number;

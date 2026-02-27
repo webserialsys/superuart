@@ -8,13 +8,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">super uart</p>
             <h1 className="mt-4 text-4xl font-semibold leading-tight">
-              Developer-first panel for remote interaction with UART devices
+              Secure access to your remote UART workspace
             </h1>
           </div>
 
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p>Current integration: auth, users, health and async task endpoints.</p>
-            <p>Next-ready modules: device registry, session booking, terminal bridge.</p>
+            <p>Sign in to manage devices, control access, and start terminal sessions.</p>
+            <p>Built for shared labs where teachers and students use the same hardware pool.</p>
           </div>
         </section>
 

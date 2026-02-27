@@ -8,17 +8,17 @@ const cards = [
   {
     icon: ShieldCheck,
     title: "Auth + RBAC",
-    description: "JWT authorization flow is already wired to backend endpoints and prepared for role-based UI gates.",
+    description: "Secure sign-in, role-based access, and protected routes for teachers and students.",
   },
   {
     icon: Cable,
     title: "Device Workflows",
-    description: "Device screens are scaffolded to grow from mock data to real CRUD and booking sessions.",
+    description: "Manage UART devices, review status, and route users to active terminal sessions.",
   },
   {
     icon: Terminal,
     title: "UART Ready",
-    description: "UI architecture keeps a dedicated path for xterm.js and WebSocket features from the next stages.",
+    description: "Open interactive serial sessions with configurable baudrate and role-aware access.",
   },
 ];
 
@@ -28,11 +28,10 @@ export default function HomePage() {
       <div className="animate-fade-up space-y-6">
         <p className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">super uart / web console</p>
         <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">
-          Minimal interface for embedded dev workflows and remote UART sessions
+          Remote UART workspace for labs, classrooms, and hardware teams
         </h1>
         <p className="max-w-2xl text-muted-foreground">
-          This frontend is integrated with the current FastAPI API and structured for progressive delivery: auth, devices,
-          live terminal and monitoring.
+          Use one web console for authentication, device management, and serial terminal access across your environment.
         </p>
         <div className="flex flex-wrap gap-3">
           <Button asChild>

@@ -21,6 +21,8 @@ type SessionRead = {
   connection_id: string;
   device_uuid: string;
   status: "ACTIVE" | "CLOSED" | "EXPIRED";
+  created_at?: string;
+  locked_at?: string | null;
 };
 
 export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) {
@@ -76,10 +78,47 @@ export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) 
         selectionBackground: "#334155",
       },
     });
+    let isDisposed = false;
+    let initialFitFrame: number | null = null;
+    let socketListenerCleanup: (() => void) | null = null;
+    const safeWriteln = (value: string) => {
+      if (isDisposed) {
+        return;
+      }
+      try {
+        terminal.writeln(value);
+      } catch {
+        // xterm can throw while disposing.
+      }
+    };
+    const safeWrite = (value: string) => {
+      if (isDisposed) {
+        return;
+      }
+      try {
+        terminal.write(value);
+      } catch {
+        // xterm can throw while disposing.
+      }
+    };
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(container);
-    fitAddon.fit();
+    const safeFit = () => {
+      if (isDisposed) {
+        return;
+      }
+      try {
+        fitAddon.fit();
+      } catch {
+        // xterm can throw while dimensions are not ready or after dispose.
+      }
+    };
+    if (typeof window.requestAnimationFrame === "function") {
+      initialFitFrame = window.requestAnimationFrame(() => safeFit());
+    } else {
+      safeFit();
+    }
     terminalRef.current = terminal;
     sessionRef.current = null;
     socketRef.current = null;
@@ -87,13 +126,23 @@ export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) 
     const label =
       deviceName?.trim() || (deviceId ? `device ${deviceId.slice(0, 8)}` : "device");
     const selectedBaudrate = normalizeBaudrate(baudrate);
-    terminal.writeln(`Connected to ${label}.`);
-    terminal.writeln(`UART baudrate set to ${selectedBaudrate} bps.`);
-    terminal.writeln("Connecting to mock WebSocket UART stream...");
+    safeWriteln(`Connected to ${label}.`);
+    safeWriteln(`UART baudrate set to ${selectedBaudrate} bps.`);
+    safeWriteln("Connecting to mock WebSocket UART stream...");
 
     const controller = new AbortController();
+    const cleanupSocketListeners = () => {
+      if (socketListenerCleanup) {
+        socketListenerCleanup();
+        socketListenerCleanup = null;
+      }
+    };
 
     const openWebSocket = (connectionId: string, deviceUuid: string) => {
+      if (isDisposed) {
+        return;
+      }
+      cleanupSocketListeners();
       const wsBaseUrl = API_BASE_URL.replace(/^http/i, "ws");
       const wsParams = new URLSearchParams({
         connection_id: connectionId,
@@ -103,35 +152,82 @@ export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) 
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
-      socket.addEventListener("open", () => {
-        terminal.writeln("WebSocket connected.");
-      });
+      const handleOpen = () => {
+        safeWriteln("WebSocket connected.");
+      };
 
-      socket.addEventListener("message", (event) => {
-        terminal.write(String(event.data));
-      });
+      const handleMessage = (event: MessageEvent) => {
+        safeWrite(String(event.data));
+      };
 
-      socket.addEventListener("close", (event) => {
+      const handleClose = (event: CloseEvent) => {
         const reason = event.reason ? `: ${event.reason}` : "";
-        terminal.writeln(`\r\n[WebSocket disconnected${reason}]`);
-      });
+        safeWriteln(`\r\n[WebSocket disconnected${reason}]`);
+      };
 
-      socket.addEventListener("error", () => {
-        terminal.writeln("\r\n[WebSocket error]");
-      });
+      const handleError = () => {
+        safeWriteln("\r\n[WebSocket error]");
+      };
+
+      socket.addEventListener("open", handleOpen);
+      socket.addEventListener("message", handleMessage);
+      socket.addEventListener("close", handleClose);
+      socket.addEventListener("error", handleError);
+      socketListenerCleanup = () => {
+        socket.removeEventListener("open", handleOpen);
+        socket.removeEventListener("message", handleMessage);
+        socket.removeEventListener("close", handleClose);
+        socket.removeEventListener("error", handleError);
+      };
     };
 
     const requestSession = async () => {
-      if (!deviceId?.trim()) {
-        terminal.writeln("\r\n[Select a device to start a session]");
-        return;
-      }
       if (!token || !user?.uuid) {
-        terminal.writeln("\r\n[Login required to open a session]");
+        safeWriteln("\r\n[Login required to open a session]");
         return;
       }
 
-      terminal.writeln(`Requesting session lock at ${selectedBaudrate} bps...`);
+      let existingActiveSession: SessionRead | null = null;
+      try {
+        const sessions = await apiRequest<{ data: SessionRead[] }>("/api/v1/sessions?page=1&items_per_page=100", {
+          method: "GET",
+          token,
+          signal: controller.signal,
+        });
+        const activeSessions = (sessions.data ?? []).filter((session) => session.status === "ACTIVE");
+        if (activeSessions.length > 0) {
+          const sortedByMostRecent = [...activeSessions].sort((left, right) => {
+            const leftTime = Date.parse(left.locked_at ?? left.created_at ?? "");
+            const rightTime = Date.parse(right.locked_at ?? right.created_at ?? "");
+            const safeLeft = Number.isNaN(leftTime) ? 0 : leftTime;
+            const safeRight = Number.isNaN(rightTime) ? 0 : rightTime;
+            return safeRight - safeLeft;
+          });
+          existingActiveSession =
+            (deviceId ? sortedByMostRecent.find((session) => session.device_uuid === deviceId) : null) ??
+            sortedByMostRecent[0];
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load active sessions";
+        safeWriteln(`\r\n[${message}]`);
+      }
+      if (isDisposed) {
+        return;
+      }
+
+      if (existingActiveSession) {
+        sessionRef.current = existingActiveSession;
+        safeWriteln(`Using active session ${existingActiveSession.uuid}. Opening stream...`);
+        openWebSocket(existingActiveSession.connection_id, existingActiveSession.device_uuid);
+        return;
+      }
+
+      if (!deviceId?.trim()) {
+        safeWriteln("\r\n[Select a device to start a session]");
+        return;
+      }
+
+      safeWriteln(`Requesting session lock at ${selectedBaudrate} bps...`);
       try {
         sessionRef.current = await apiRequest<SessionRead>("/api/v1/session", {
           method: "POST",
@@ -144,16 +240,19 @@ export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) 
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to start session";
-        terminal.writeln(`\r\n[${message}]`);
+        safeWriteln(`\r\n[${message}]`);
+        return;
+      }
+      if (isDisposed) {
         return;
       }
 
       if (!sessionRef.current) {
-        terminal.writeln("\r\n[Session creation failed]");
+        safeWriteln("\r\n[Session creation failed]");
         return;
       }
 
-      terminal.writeln(`Session ${sessionRef.current.uuid} active. Opening stream...`);
+      safeWriteln(`Session ${sessionRef.current.uuid} active. Opening stream...`);
       openWebSocket(sessionRef.current.connection_id, sessionRef.current.device_uuid);
     };
 
@@ -165,16 +264,21 @@ export function XtermPanel({ deviceName, deviceId, baudrate }: XtermPanelProps) 
       }
     });
 
-    const handleResize = () => fitAddon.fit();
+    const handleResize = () => safeFit();
     window.addEventListener("resize", handleResize);
 
-    const observer = new ResizeObserver(() => fitAddon.fit());
+    const observer = new ResizeObserver(() => safeFit());
     observer.observe(container);
 
     return () => {
+      isDisposed = true;
       controller.abort();
       observer.disconnect();
       window.removeEventListener("resize", handleResize);
+      cleanupSocketListeners();
+      if (initialFitFrame !== null && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(initialFitFrame);
+      }
       inputDisposable.dispose();
       if (
         socketRef.current &&

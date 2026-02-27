@@ -103,13 +103,16 @@ async def test_write_device_create_failed(mock_db):
 async def test_read_devices_success(mock_db, mock_redis):
     devices_data = {"data": [{"uuid": str(uuid7())}], "count": 1}
     expected_response = {"data": devices_data["data"], "pagination": {}}
+    current_user = {"uuid": str(uuid7())}
     mock_db.execute = AsyncMock(return_value=_RowsResult([]))
 
     with patch("src.app.api.v1.devices.crud_devices") as mock_crud:
         mock_crud.get_multi = AsyncMock(return_value=devices_data)
 
         with patch("src.app.api.v1.devices.paginated_response", return_value=expected_response):
-            result = await read_devices(request=Mock(), db=mock_db, redis=mock_redis, page=1, items_per_page=10)
+            result = await read_devices(
+                request=Mock(), current_user=current_user, db=mock_db, redis=mock_redis, page=1, items_per_page=10
+            )
 
     assert result == expected_response
 
@@ -119,13 +122,16 @@ async def test_read_devices_success(mock_db, mock_redis):
 async def test_read_devices_passes_pagination_params(mock_db, mock_redis):
     devices_data = {"data": [], "count": 0}
     expected_response = {"data": [], "pagination": {}}
+    current_user = {"uuid": str(uuid7())}
     mock_db.execute = AsyncMock(return_value=_RowsResult([]))
 
     with patch("src.app.api.v1.devices.crud_devices") as mock_crud:
         mock_crud.get_multi = AsyncMock(return_value=devices_data)
 
         with patch("src.app.api.v1.devices.paginated_response", return_value=expected_response):
-            result = await read_devices(request=Mock(), db=mock_db, redis=mock_redis, page=2, items_per_page=5)
+            result = await read_devices(
+                request=Mock(), current_user=current_user, db=mock_db, redis=mock_redis, page=2, items_per_page=5
+            )
 
     assert result == expected_response
     get_multi_kwargs = mock_crud.get_multi.call_args.kwargs
@@ -140,6 +146,7 @@ async def test_read_devices_includes_occupancy_for_teacher(mock_db, mock_redis):
     device_uuid = uuid7()
     user_uuid = uuid7()
     session_uuid = uuid7()
+    current_user = {"uuid": str(uuid7())}
     devices_data = {"data": [{"uuid": str(device_uuid), "status": DeviceStatus.AVAILABLE}], "count": 1}
     expected_response = {"data": devices_data["data"], "pagination": {}}
     session = SimpleNamespace(
@@ -159,7 +166,9 @@ async def test_read_devices_includes_occupancy_for_teacher(mock_db, mock_redis):
         mock_crud.get_multi = AsyncMock(return_value=devices_data)
 
         with patch("src.app.api.v1.devices.paginated_response", return_value=expected_response):
-            result = await read_devices(request=Mock(), db=mock_db, redis=mock_redis, page=1, items_per_page=10)
+            result = await read_devices(
+                request=Mock(), current_user=current_user, db=mock_db, redis=mock_redis, page=1, items_per_page=10
+            )
 
     assert result["data"][0]["status"] == DeviceStatus.BUSY
     assert result["data"][0]["occupied_by_label"] == "Busy Student"
@@ -172,6 +181,7 @@ async def test_read_devices_includes_occupancy_for_teacher(mock_db, mock_redis):
 @pytest.mark.unit
 async def test_read_devices_keeps_unavailable_status(mock_db, mock_redis):
     device_uuid = uuid7()
+    current_user = {"uuid": str(uuid7())}
     devices_data = {"data": [{"uuid": str(device_uuid), "status": DeviceStatus.UNAVAILABLE}], "count": 1}
     expected_response = {"data": devices_data["data"], "pagination": {}}
     session = SimpleNamespace(
@@ -191,7 +201,9 @@ async def test_read_devices_keeps_unavailable_status(mock_db, mock_redis):
         mock_crud.get_multi = AsyncMock(return_value=devices_data)
 
         with patch("src.app.api.v1.devices.paginated_response", return_value=expected_response):
-            result = await read_devices(request=Mock(), db=mock_db, redis=mock_redis, page=1, items_per_page=10)
+            result = await read_devices(
+                request=Mock(), current_user=current_user, db=mock_db, redis=mock_redis, page=1, items_per_page=10
+            )
 
     assert result["data"][0]["status"] == DeviceStatus.UNAVAILABLE
 

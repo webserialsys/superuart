@@ -102,7 +102,7 @@ export default function HostsPage() {
       const [hostsResult, devicesResult, usersResult, accessResult] = await Promise.all([
         listHosts(token),
         listDevices(token, 1, 200),
-        listUsers(token, 1, 200),
+        listUsers(token),
         listAccesses(token, 1, 500),
       ]);
 

@@ -3,13 +3,21 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Cable, LayoutGrid, LogOut, Server, TerminalSquare, Users } from "lucide-react";
+import { Cable, LayoutGrid, LogOut, Server, TerminalSquare, Users, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-const navigation = [
+type NavigationItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  teacherOnly?: boolean;
+  disabled?: boolean;
+};
+
+const navigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, teacherOnly: true },
   { href: "/hosts", label: "Hosts", icon: Server, teacherOnly: true },
   { href: "/students", label: "Students", icon: Users, teacherOnly: true },

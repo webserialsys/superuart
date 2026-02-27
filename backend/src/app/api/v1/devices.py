@@ -121,6 +121,7 @@ async def write_device(
 )
 async def read_devices(
     request: Request,
+    current_user: Annotated[dict, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
     page: int = 1,
@@ -148,7 +149,16 @@ async def read_devices(
             continue
         device_ids.append(_normalize_uuid(raw_uuid))
 
-    occupied_by_device, expired_device_ids = await _build_occupancy(db=db, redis=redis, device_ids=device_ids)
+    current_user_uuid = current_user["uuid"]
+    if isinstance(current_user_uuid, str):
+        current_user_uuid = _normalize_uuid(current_user_uuid)
+
+    occupied_by_device, expired_device_ids = await _build_occupancy(
+        db=db,
+        redis=redis,
+        device_ids=device_ids,
+        current_user_uuid=current_user_uuid,
+    )
 
     for row in device_rows:
         if not isinstance(row, dict):
