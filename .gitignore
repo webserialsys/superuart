@@ -1,2 +1,5 @@
 doc
 .vscode
+.pytest*
+.mypy*
+.env
