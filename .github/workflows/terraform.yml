@@ -1,0 +1,50 @@
+name: Terraform YC
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Terraform action
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_VAR_yc_token: ${{ secrets.YC_TOKEN }}
+      TF_VAR_yc_cloud_id: ${{ vars.YC_CLOUD_ID }}
+      TF_VAR_yc_folder_id: ${{ vars.YC_FOLDER_ID }}
+      TF_VAR_vm_image_id: ${{ vars.YC_VM_IMAGE_ID }}
+      TF_VAR_ssh_keys: ${{ vars.TF_SSH_KEYS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        run: terraform fmt -check
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        if: ${{ github.event.inputs.action == 'plan' }}
+        run: terraform plan -input=false
+
+      - name: Terraform apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: terraform apply -auto-approve -input=false
