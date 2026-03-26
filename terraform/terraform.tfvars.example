@@ -1,7 +1,6 @@
 yc_token     = "replace-me"
 yc_cloud_id  = "replace-me"
 yc_folder_id = "replace-me"
-vm_image_id  = "replace-with-image-id"
 
 ssh_keys = [
   {
