@@ -23,5 +23,5 @@ output "ssh_keys_metadata" {
   value = join("\n", [
     for item in var.ssh_keys : "${item.user}:${trimspace(item.key)}"
   ])
-  sensitive   = true
+  sensitive = true
 }
