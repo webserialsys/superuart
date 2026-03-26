@@ -17,6 +17,8 @@ resource "yandex_vpc_subnet" "main" {
 }
 
 resource "yandex_compute_instance" "vm" {
+  service_account_id        = "ajef6r4clgqrjv36s9pf"
+
   name                      = "superuart-vm"
   hostname                  = "superuart-vm"
   zone                      = "ru-central1-d"
