@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    paths:
+      - "backend/**"
+      - "frontend/**"
   pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
   workflow_dispatch:
 
 jobs:
