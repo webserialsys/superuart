@@ -1,64 +1,61 @@
-# Terraform for SuperUART
+# Terraform template for Yandex Cloud
 
-Стартовый конфиг поднимает одну Linux VM в Yandex Cloud:
+This directory contains a minimal Terraform template for creating a VM in Yandex Cloud.
 
-- VPC network
-- subnet
-- Ubuntu 22.04 VM
-- public IP
-- SSH-доступ через локальный публичный ключ
+## What is included
 
-## Файлы
+- Yandex provider configuration
+- VPC network and subnet
+- Single VM with configurable resources
+- Support for multiple SSH public keys via `metadata.ssh-keys`
+- Outputs for instance ID and IP addresses
 
-- `versions.tf` - версия Terraform и provider
-- `variables.tf` - входные параметры
-- `main.tf` - сеть, подсеть, VM
-- `outputs.tf` - IP-адреса и SSH-команда
-- `terraform.tfvars.example` - пример значений
+The template intentionally keeps only the required input variables:
 
-## Что нужно подготовить
+- `yc_token`
+- `yc_cloud_id`
+- `yc_folder_id`
+- `vm_image_id`
+- `ssh_keys`
 
-1. Установить Terraform.
-2. Создать VM service access в Yandex Cloud и получить:
-   - `yc_token`
-   - `yc_cloud_id`
-   - `yc_folder_id`
-3. Убедиться, что у тебя есть SSH-ключ, например `~/.ssh/id_ed25519.pub`.
+## Local usage
 
-## Быстрый старт
+1. Copy `terraform.tfvars.example` to `terraform.tfvars`.
+2. Fill in `yc_token`, `yc_cloud_id`, `yc_folder_id`, and `vm_image_id`.
+3. Update `ssh_keys` with one or more public keys.
+4. Run:
 
-Скопируй пример переменных:
-
-```powershell
-cd terraform
-Copy-Item terraform.tfvars.example terraform.tfvars
-```
-
-Заполни `terraform.tfvars`, затем выполни:
-
-```powershell
+```bash
 terraform init
 terraform plan
 terraform apply
 ```
 
-После успешного применения Terraform выведет:
+## GitHub Actions usage
 
-- имя VM
-- внутренний IP
-- внешний IP
-- готовую SSH-команду
+Recommended split:
 
-## Удаление ресурсов
+- GitHub Secrets:
+  - `YC_TOKEN`
+- GitHub Variables:
+  - `YC_CLOUD_ID`
+  - `YC_FOLDER_ID`
+  - `YC_VM_IMAGE_ID`
+  - `TF_SSH_KEYS`
 
-```powershell
-terraform destroy
+`TF_SSH_KEYS` should be stored as JSON:
+
+```json
+[
+  {
+    "user": "ubuntu",
+    "key": "ssh-ed25519 AAAAC3Nza... user1@laptop"
+  },
+  {
+    "user": "ubuntu",
+    "key": "ssh-ed25519 AAAAC3Nza... user2@work"
+  }
+]
 ```
 
-## Что дальше
-
-Следующий шаг после `terraform apply`:
-
-1. Подключиться по SSH к VM.
-2. Добавить `ansible/` и playbook для установки Docker.
-3. Затем развернуть приложение через `docker compose`.
+In GitHub Actions this value is mapped to `TF_VAR_ssh_keys`, and Terraform will deserialize the JSON automatically.

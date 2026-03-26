@@ -3,3 +3,7 @@ doc
 .pytest*
 .mypy*
 .env
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
