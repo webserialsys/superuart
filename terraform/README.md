@@ -15,13 +15,12 @@ The template intentionally keeps only the required input variables:
 - `yc_token`
 - `yc_cloud_id`
 - `yc_folder_id`
-- `vm_image_id`
 - `ssh_keys`
 
 ## Local usage
 
 1. Copy `terraform.tfvars.example` to `terraform.tfvars`.
-2. Fill in `yc_token`, `yc_cloud_id`, `yc_folder_id`, and `vm_image_id`.
+2. Fill in `yc_token`, `yc_cloud_id`, `yc_folder_id`.
 3. Update `ssh_keys` with one or more public keys.
 4. Run:
 
@@ -40,7 +39,6 @@ Recommended split:
 - GitHub Variables:
   - `YC_CLOUD_ID`
   - `YC_FOLDER_ID`
-  - `YC_VM_IMAGE_ID`
   - `TF_SSH_KEYS`
 
 `TF_SSH_KEYS` should be stored as JSON:
