@@ -55,16 +55,18 @@ CMD ["python", "-m", "pytest", "./tests"]
 # --------- Final Stage ---------
 FROM runtime-base AS production
 
-# Copy production virtual environment (without dev dependencies)
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --chown=app:app src/app /code/app
 COPY --chown=app:app src/migrations /code/migrations
 COPY --chown=app:app src/alembic.ini /code/alembic.ini
 COPY --chown=app:app docker-entrypoint.sh /code/docker-entrypoint.sh
+
+WORKDIR /code
+
 RUN chmod +x /code/docker-entrypoint.sh
 
 ENTRYPOINT ["/code/docker-entrypoint.sh"]
 
 LABEL org.opencontainers.image.source=https://github.com/webserialsys/superuart
 
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
