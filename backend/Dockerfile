@@ -1,70 +1,48 @@
+FROM python:3.11-slim-trixie AS base
 
-# --------- Builder Stage ---------
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-# Set environment variables for uv
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install dependencies first (for better layer caching)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
 
-# Copy the project source code
-COPY . /app
+FROM base AS production
 
-# Install the project in non-editable mode
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-editable
+ENV UV_NO_DEV=1
 
-# --------- Test Builder Stage ---------
-FROM builder AS test-builder
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
 
-# Add dev/test dependencies on top of the base virtualenv
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --extra dev --group dev --no-editable
+COPY src ./src
+COPY docker-entrypoint.sh ./
 
-# --------- Runtime Base Stage ---------
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS runtime-base
+RUN uv sync --locked --no-dev \
+    && groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --home-dir /app app \
+    && chown -R app:app /app
 
-# Create a non-root user for security
-RUN groupadd --gid 1000 app \
-    && useradd --uid 1000 --gid app --shell /bin/bash --create-home app
-
-# Ensure the virtual environment is in the PATH
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Switch to the non-root user
 USER app
 
-# Set the working directory
-WORKDIR /code
+EXPOSE 8000
 
-# --------- Test Stage ---------
-FROM runtime-base AS test
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
+CMD ["uv", "run", "--no-sync", "gunicorn", "src.app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
 
-# Copy test virtual environment (includes dev dependencies)
-COPY --from=test-builder --chown=app:app /app/.venv /app/.venv
 
-CMD ["python", "-m", "pytest", "./tests"]
+FROM base AS test
 
-# --------- Final Stage ---------
-FROM runtime-base AS production
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --extra dev --group dev --no-install-project
 
-# Copy production virtual environment (without dev dependencies)
-COPY --from=builder --chown=app:app /app/.venv /app/.venv
-COPY --chown=app:app src/migrations /code/migrations
-COPY --chown=app:app src/alembic.ini /code/alembic.ini
-COPY --chown=app:app docker-entrypoint.sh /code/docker-entrypoint.sh
-RUN chmod +x /code/docker-entrypoint.sh
+COPY src ./src
+COPY tests ./tests
+COPY docker-entrypoint.sh ./
 
-ENTRYPOINT ["/code/docker-entrypoint.sh"]
+RUN uv sync --locked --extra dev --group dev
 
-LABEL org.opencontainers.image.source=https://github.com/webserialsys/superuart
-
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
+CMD ["uv", "run", "--no-sync", "pytest", "tests"]

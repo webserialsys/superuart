@@ -1,9 +1,17 @@
-node_modules
-.next
-coverage
-dist
-.git
-*.log
-.env*
-!.env.example
-tsconfig.tsbuildinfo
+# Ignore everything by default and keep only files required for the image build.
+**
+
+!.dockerignore
+!Dockerfile
+!.eslintrc.json
+!bun.lock
+!next-env.d.ts
+!next.config.ts
+!package.json
+!postcss.config.mjs
+!tailwind.config.ts
+!tsconfig.json
+!src/
+!src/**
+!public/
+!public/**

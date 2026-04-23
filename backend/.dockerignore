@@ -1,0 +1,13 @@
+**
+
+!pyproject.toml
+!uv.lock
+!docker-entrypoint.sh
+!src/
+!src/app/
+!src/app/**
+!src/migrations/
+!src/migrations/**
+!src/alembic.ini
+!tests/
+!tests/**
