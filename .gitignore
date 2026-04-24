@@ -2,6 +2,7 @@ doc
 .vscode
 .pytest*
 .mypy*
+.uv-cache/
 .env
 .terraform/
 *.tfstate

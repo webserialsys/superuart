@@ -1,9 +1,7 @@
 services:
   migrate:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
     command: ["migrate"]
     env_file:
       - ./backend/.env
@@ -16,10 +14,8 @@ services:
       - data
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
     command:
       - uv
       - run
@@ -66,10 +62,8 @@ services:
     restart: unless-stopped
 
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
     command: ["uv", "run", "--no-sync", "arq", "src.app.core.worker.settings.WorkerSettings"]
     env_file:
       - ./backend/.env
@@ -102,11 +96,8 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+    image: ghcr.io/webserialsys/superuart/frontend:latest
+    pull_policy: always
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
     expose:
