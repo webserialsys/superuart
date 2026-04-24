@@ -99,7 +99,7 @@ services:
     image: ghcr.io/webserialsys/superuart/frontend:latest
     pull_policy: always
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      NEXT_PUBLIC_API_BASE_URL: ""
     expose:
       - "3000"
     depends_on:
