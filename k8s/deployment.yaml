@@ -12,10 +12,20 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: backend
           image: ghcr.io/webserialsys/superuart/backend:latest
           imagePullPolicy: Always
+          env:
+            - name: RUN_MIGRATIONS
+              value: "0"
+          envFrom:
+            - configMapRef:
+                name: superuart-config
+            - secretRef:
+                name: superuart-secret
           ports:
             - containerPort: 8000
 ---
@@ -33,6 +43,8 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: frontend
           image: ghcr.io/webserialsys/superuart/frontend:latest
@@ -57,10 +69,20 @@ spec:
       labels:
         app: worker
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: worker
           image: ghcr.io/webserialsys/superuart/backend:latest
           imagePullPolicy: Always
+          env:
+            - name: RUN_MIGRATIONS
+              value: "0"
+          envFrom:
+            - configMapRef:
+                name: superuart-config
+            - secretRef:
+                name: superuart-secret
           command:
             - uv
             - run

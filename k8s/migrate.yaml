@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: migrate
+          image: ghcr.io/webserialsys/superuart/backend:latest
+          imagePullPolicy: Always
+          args:
+            - migrate
+          envFrom:
+            - configMapRef:
+                name: superuart-config
+            - secretRef:
+                name: superuart-secret

@@ -1,13 +1,24 @@
 apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: alb
+  labels:
+    app.kubernetes.io/component: controller
+spec:
+  controller: ingress.alb.yc.io/yc-alb-ingress-controller
+---
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: superuart
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 20m
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    ingress.alb.yc.io/group-name: superuart
+    ingress.alb.yc.io/external-ipv4-address: 81.26.190.20
+    ingress.alb.yc.io/request-timeout: 3600s
+    ingress.alb.yc.io/subnets: e9bt2ouvavk2oitfl3tu,fl8vs8n9mrtau5tp9vqc
+    # ingress.alb.yc.io/security-groups: <SECURITY_GROUP_ID>
 spec:
-  ingressClassName: nginx
+  ingressClassName: alb
   rules:
     - http:
         paths:
