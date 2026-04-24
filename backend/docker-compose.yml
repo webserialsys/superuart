@@ -1,69 +1,118 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    command: ["migrate"]
+    env_file:
+      - ./.env
+    environment:
+      RUN_MIGRATIONS: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/src/.env:ro
+    networks:
+      - data
+
   web:
     build:
       context: .
       dockerfile: Dockerfile
       target: production
-    command: uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload
-    # command: gunicorn src.app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: ["uv", "run", "--no-sync", "uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file:
-      - ./src/.env
+      - ./.env
     environment:
-      RUN_MIGRATIONS: "1"
+      RUN_MIGRATIONS: "0"
     ports:
       - "8000:8000"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./src:/code/src
-      - ./src/migrations:/code/migrations
-      - ./src/alembic.ini:/code/alembic.ini
-      - ./src/.env:/code/.env
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0 if urlopen('http://127.0.0.1:8000/api/v1/ready').status == 200 else 1)"]
-      interval: 30s
+      test:
+        [
+          "CMD",
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "-c",
+          "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3).status == 200 else 1)",
+        ]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/src/.env:ro
+    networks:
+      - app
+      - data
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
       target: production
-    command: arq src.app.core.worker.settings.WorkerSettings
+    command: ["uv", "run", "--no-sync", "arq", "src.app.core.worker.settings.WorkerSettings"]
     env_file:
-      - ./src/.env
+      - ./.env
     environment:
       RUN_MIGRATIONS: "0"
     depends_on:
-      web:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "-c",
+          "from src.app.core.worker.settings import start_arq_service; start_arq_service(check=True)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     volumes:
-      - ./src:/code/src
-      - ./src/.env:/code/.env
+      - ./src:/app/src
+      - ./.env:/app/src/.env:ro
+    networks:
+      - data
 
   db:
     image: postgres:16
     env_file:
-      - ./src/.env
+      - ./.env
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - "5434:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - data
 
   redis:
     image: redis:alpine
@@ -77,33 +126,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    networks:
+      - data
 
-  # nginx:
-  #   image: nginx:latest
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - ./default.conf:/etc/nginx/conf.d/default.conf
-  #   depends_on:
-  #     - web
-
-  #-------- uncomment to run tests --------
   pytest:
     build:
       context: .
       dockerfile: Dockerfile
       target: test
     env_file:
-      - ./src/.env
+      - ./.env
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: python -m pytest ./tests
+    command: ["uv", "run", "--no-sync", "pytest", "tests"]
     volumes:
-      - .:/code
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./.env:/app/src/.env:ro
+    networks:
+      - data
 
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  app:
+  data:

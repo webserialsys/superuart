@@ -131,6 +131,7 @@ cython_debug/
 .DS_Store
 
 .ruff_cache
+.uv-cache/
 
 .idea
 
@@ -143,4 +144,3 @@ src/.env
 
 # Don't ignore files inside of script folder:
 !scripts/*
-

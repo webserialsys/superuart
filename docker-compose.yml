@@ -1,54 +1,103 @@
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
-    command: gunicorn src.app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -
+  migrate:
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
+    command: ["migrate"]
     env_file:
-      - ./backend/src/.env
+      - ./backend/.env
     environment:
       RUN_MIGRATIONS: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - data
+
+  backend:
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
+    command:
+      - uv
+      - run
+      - --no-sync
+      - gunicorn
+      - src.app.main:app
+      - -w
+      - "4"
+      - -k
+      - uvicorn.workers.UvicornWorker
+      - -b
+      - 0.0.0.0:8000
+    env_file:
+      - ./backend/.env
+    environment:
+      RUN_MIGRATIONS: "0"
     expose:
       - "8000"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - app
+      - data
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0 if urlopen('http://127.0.0.1:8000/api/v1/ready').status == 200 else 1)"]
-      interval: 30s
+      test:
+        [
+          "CMD",
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "-c",
+          "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3).status == 200 else 1)",
+        ]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
-    command: arq src.app.core.worker.settings.WorkerSettings
+    image: ghcr.io/webserialsys/superuart/backend:latest
+    pull_policy: always
+    command: ["uv", "run", "--no-sync", "arq", "src.app.core.worker.settings.WorkerSettings"]
     env_file:
-      - ./backend/src/.env
+      - ./backend/.env
     environment:
       RUN_MIGRATIONS: "0"
     depends_on:
-      backend:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "-c",
+          "from src.app.core.worker.settings import start_arq_service; start_arq_service(check=True)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ""
+    image: ghcr.io/webserialsys/superuart/frontend:latest
+    pull_policy: always
     environment:
       NEXT_PUBLIC_API_BASE_URL: ""
     expose:
@@ -56,28 +105,26 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    networks:
+      - app
     restart: unless-stopped
 
   db:
     image: postgres:16
     env_file:
-      - ./backend/src/.env
+      - ./backend/.env
     volumes:
       - postgres-data:/var/lib/postgresql/data
     expose:
       - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - data
     restart: unless-stopped
 
   redis:
@@ -92,6 +139,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    networks:
+      - data
     restart: unless-stopped
 
   nginx:
@@ -102,17 +151,19 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       frontend:
-        condition: service_healthy
+        condition: service_started
       backend:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    networks:
+      - edge
+      - app
     restart: unless-stopped
 
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  edge:
+  app:
+  data:

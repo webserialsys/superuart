@@ -16,6 +16,14 @@ resource "yandex_vpc_subnet" "main" {
   v4_cidr_blocks = ["192.168.10.0/24"]
 }
 
+resource "yandex_vpc_address" "addr" {
+  name = "superuart-vm-addr"
+
+  external_ipv4_address {
+    zone_id = "ru-central1-d"
+  }
+}
+
 resource "yandex_compute_instance" "vm" {
   service_account_id = "ajef6r4clgqrjv36s9pf"
 
@@ -39,8 +47,9 @@ resource "yandex_compute_instance" "vm" {
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.main.id
-    nat       = true
+    subnet_id      = yandex_vpc_subnet.main.id
+    nat            = true
+    nat_ip_address = yandex_vpc_address.addr.external_ipv4_address[0].address
   }
 
   scheduling_policy {

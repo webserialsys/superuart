@@ -15,13 +15,13 @@ output "internal_ip_address" {
 
 output "external_ip_address" {
   description = "Public IPv4 address."
-  value       = yandex_compute_instance.vm.network_interface[0].nat_ip_address
+  value       = yandex_vpc_address.addr.external_ipv4_address[0].address
 }
 
 output "ssh_keys_metadata" {
   description = "Rendered ssh-keys metadata string."
-  value = join("\n", [
+  value       = join("\n", [
     for item in var.ssh_keys : "${item.user}:${trimspace(item.key)}"
   ])
-  sensitive = true
+  sensitive   = true
 }
