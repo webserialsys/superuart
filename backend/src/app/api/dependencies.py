@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: Annotated[AsyncSession, Depends(async_get_db)]
 ) -> dict[str, Any]:
-    token_data = await verify_token(token, TokenType.ACCESS, db)
+    token_data = await verify_token(token, TokenType.ACCESS)
     if token_data is None:
         raise UnauthorizedException("User not authenticated.")
 
@@ -38,7 +38,7 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(async_g
         if token_type.lower() != "bearer" or not token_value:
             return None
 
-        token_data = await verify_token(token_value, TokenType.ACCESS, db)
+        token_data = await verify_token(token_value, TokenType.ACCESS)
         if token_data is None:
             return None
 

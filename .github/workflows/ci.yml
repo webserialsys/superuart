@@ -1,10 +1,10 @@
 name: CI
 
 on:
-  push:
-    paths:
-      - "backend/**"
-      - "frontend/**"
+  # push:
+  #   paths:
+  #     - "backend/**"
+  #     - "frontend/**"
   pull_request:
     paths:
       - "backend/**"

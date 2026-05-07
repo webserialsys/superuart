@@ -3,14 +3,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import HTTPException, Response
-from jose import JWTError
 
 from src.app.api.v1.health import health, ready
 from src.app.api.v1.logout import logout
 from src.app.api.v1.tasks import create_task, get_task
 from src.app.core.db.database import async_get_db
-from src.app.core.utils.cache import async_get_redis
 from src.app.core.exceptions.http_exceptions import UnauthorizedException
+from src.app.core.utils.cache import async_get_redis
 from src.app.main import app
 
 
@@ -57,42 +56,23 @@ async def test_ready_returns_unhealthy_when_dependency_fails():
 
 
 @pytest.mark.asyncio
-async def test_logout_success_blacklists_tokens_and_clears_cookie(mock_db):
+async def test_logout_success_clears_cookie():
     response = Response()
 
-    with patch("src.app.api.v1.logout.blacklist_tokens", AsyncMock()) as mock_blacklist:
-        result = await logout(
-            response=response,
-            access_token="access-token",
-            refresh_token="refresh-token",
-            db=mock_db,
-        )
-
-    assert result == {"message": "Logged out successfully"}
-    mock_blacklist.assert_awaited_once_with(
+    result = await logout(
+        response=response,
         access_token="access-token",
         refresh_token="refresh-token",
-        db=mock_db,
     )
+
+    assert result == {"message": "Logged out successfully"}
     assert "refresh_token=" in response.headers.get("set-cookie", "")
 
 
 @pytest.mark.asyncio
-async def test_logout_requires_refresh_token(mock_db):
+async def test_logout_requires_refresh_token():
     with pytest.raises(UnauthorizedException, match="Refresh token not found"):
-        await logout(response=Response(), access_token="access-token", refresh_token=None, db=mock_db)
-
-
-@pytest.mark.asyncio
-async def test_logout_maps_jwt_error_to_unauthorized(mock_db):
-    with patch("src.app.api.v1.logout.blacklist_tokens", AsyncMock(side_effect=JWTError("bad token"))):
-        with pytest.raises(UnauthorizedException, match="Invalid token"):
-            await logout(
-                response=Response(),
-                access_token="access-token",
-                refresh_token="refresh-token",
-                db=mock_db,
-            )
+        await logout(response=Response(), access_token="access-token", refresh_token=None)
 
 
 @pytest.mark.asyncio

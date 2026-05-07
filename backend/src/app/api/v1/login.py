@@ -45,12 +45,12 @@ async def login_for_access_token(
 
 
 @router.post("/refresh")
-async def refresh_access_token(request: Request, db: AsyncSession = Depends(async_get_db)) -> dict[str, str]:
+async def refresh_access_token(request: Request) -> dict[str, str]:
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise UnauthorizedException("Refresh token missing.")
 
-    user_data = await verify_token(refresh_token, TokenType.REFRESH, db)
+    user_data = await verify_token(refresh_token, TokenType.REFRESH)
     if not user_data:
         raise UnauthorizedException("Invalid refresh token.")
 

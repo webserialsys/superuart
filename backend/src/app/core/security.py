@@ -10,8 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..crud.crud_users import crud_users
 from .config import settings
-from .db.crud_token_blacklist import crud_token_blacklist
-from .schemas import TokenBlacklistCreate, TokenData
+from .schemas import TokenData
 
 SECRET_KEY: SecretStr = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
@@ -70,7 +69,7 @@ async def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | 
     return encoded_jwt
 
 
-async def verify_token(token: str, expected_token_type: TokenType, db: AsyncSession) -> TokenData | None:
+async def verify_token(token: str, expected_token_type: TokenType) -> TokenData | None:
     """Verify a JWT token and return TokenData if valid.
 
     Parameters
@@ -79,18 +78,11 @@ async def verify_token(token: str, expected_token_type: TokenType, db: AsyncSess
         The JWT token to be verified.
     expected_token_type: TokenType
         The expected type of token (access or refresh)
-    db: AsyncSession
-        Database session for performing database operations.
-
     Returns
     -------
     TokenData | None
         TokenData instance if the token is valid, None otherwise.
     """
-    is_blacklisted = await crud_token_blacklist.exists(db, token=token)
-    if is_blacklisted:
-        return None
-
     try:
         payload = jwt.decode(token, SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM])
         email: str | None = payload.get("sub")
@@ -103,31 +95,3 @@ async def verify_token(token: str, expected_token_type: TokenType, db: AsyncSess
 
     except JWTError:
         return None
-
-
-async def blacklist_tokens(access_token: str, refresh_token: str, db: AsyncSession) -> None:
-    """Blacklist both access and refresh tokens.
-
-    Parameters
-    ----------
-    access_token: str
-        The access token to blacklist
-    refresh_token: str
-        The refresh token to blacklist
-    db: AsyncSession
-        Database session for performing database operations.
-    """
-    for token in [access_token, refresh_token]:
-        payload = jwt.decode(token, SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM])
-        exp_timestamp = payload.get("exp")
-        if exp_timestamp is not None:
-            expires_at = datetime.fromtimestamp(exp_timestamp)
-            await crud_token_blacklist.create(db, object=TokenBlacklistCreate(token=token, expires_at=expires_at))
-
-
-async def blacklist_token(token: str, db: AsyncSession) -> None:
-    payload = jwt.decode(token, SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM])
-    exp_timestamp = payload.get("exp")
-    if exp_timestamp is not None:
-        expires_at = datetime.fromtimestamp(exp_timestamp)
-        await crud_token_blacklist.create(db, object=TokenBlacklistCreate(token=token, expires_at=expires_at))

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...api.dependencies import get_current_superuser, get_current_user, require_roles
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
-from ...core.security import blacklist_token, get_password_hash, oauth2_scheme
+from ...core.security import get_password_hash
 from ...crud.crud_users import crud_users
 from ...models.enums import UserRole
 from ...schemas.user import UserCreate, UserCreateInternal, UserRead, UserUpdate
@@ -36,7 +36,11 @@ async def write_user(
     return created_user
 
 
-@router.get("/users", response_model=PaginatedListResponse[UserRead], dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.get(
+    "/users",
+    response_model=PaginatedListResponse[UserRead],
+    dependencies=[Depends(require_roles(UserRole.TEACHER))],
+)
 async def read_users(
     request: Request, db: Annotated[AsyncSession, Depends(async_get_db)], page: int = 1, items_per_page: int = 10
 ) -> dict:
@@ -107,7 +111,6 @@ async def erase_user(
     email: str,
     current_user: Annotated[dict, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
-    token: str = Depends(oauth2_scheme),
 ) -> dict[str, str]:
     db_user = await crud_users.get(db=db, email=email, schema_to_select=UserRead)
     if not db_user:
@@ -117,7 +120,6 @@ async def erase_user(
         raise ForbiddenException()
 
     await crud_users.delete(db=db, email=email)
-    await blacklist_token(token=token, db=db)
     return {"message": "User deleted"}
 
 
@@ -126,12 +128,10 @@ async def erase_db_user(
     request: Request,
     email: str,
     db: Annotated[AsyncSession, Depends(async_get_db)],
-    token: str = Depends(oauth2_scheme),
 ) -> dict[str, str]:
     db_user = await crud_users.exists(db=db, email=email)
     if not db_user:
         raise NotFoundException("User not found")
 
     await crud_users.db_delete(db=db, email=email)
-    await blacklist_token(token=token, db=db)
     return {"message": "User deleted from the database"}
