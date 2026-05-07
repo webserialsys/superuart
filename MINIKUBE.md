@@ -19,12 +19,16 @@ minikube ip
 ### Список аддонов
 minikube addons list
 
+### Логи пода
+kubectl logs <pod-name>
+
 ## 1. Запустить Minikube
 
 ```bash
 minikube delete
-minikube start --driver=kvm2 --cpus=4 --memory=6144 --disk-size=10g
+minikube start --driver=kvm2 --cpus=6 --memory=8192 --disk-size=15g
 minikube addons enable ingress
+minikube addons enable metrics-server
 ```
 
 ## 2. Создать secret для приватных GHCR-образов

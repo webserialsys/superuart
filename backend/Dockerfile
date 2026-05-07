@@ -30,7 +30,7 @@ USER app
 EXPOSE 8000
 
 ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
-CMD ["uv", "run", "--no-sync", "gunicorn", "src.app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
+CMD ["sh", "-c", "uv run --no-sync gunicorn src.app.main:app -w ${WEB_CONCURRENCY:-1} -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000"]
 
 
 FROM base AS test
