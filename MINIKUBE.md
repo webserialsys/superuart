@@ -76,12 +76,7 @@ kubectl get pods -l app=grafana
 kubectl get ingress superuart
 ```
 
-Backend отдает метрики для Prometheus на `/metrics`; service `backend` уже содержит scrape-аннотации.
-Prometheus можно проверить локально через port-forward:
-
-```bash
-kubectl port-forward svc/prometheus 9090:9090
-```
+Backend отдает метрики для Prometheus на `/metrics`;
 
 После этого targets доступны по адресу `http://127.0.0.1:9090/targets`.
 Подробности: `MONITORING.md`.
