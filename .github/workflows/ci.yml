@@ -1,11 +1,13 @@
 name: CI
 
 on:
-  # push:
-  #   paths:
-  #     - "backend/**"
-  #     - "frontend/**"
+  push:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - "frontend/**"
   pull_request:
+    branches: [ "main" ]
     paths:
       - "backend/**"
       - "frontend/**"
