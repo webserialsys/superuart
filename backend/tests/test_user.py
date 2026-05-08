@@ -223,30 +223,26 @@ class TestEraseUser:
         email = current_user_dict["email"]
         user_dict = sample_user_read.model_dump()
         user_dict["email"] = email
-        token = "mock_token"
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
             mock_crud.get = AsyncMock(return_value=user_dict)
             mock_crud.delete = AsyncMock(return_value=None)
 
-            with patch("src.app.api.v1.users.blacklist_token", new_callable=AsyncMock) as mock_blacklist:
-                result = await erase_user(Mock(), email, current_user_dict, mock_db, token)
+            result = await erase_user(Mock(), email, current_user_dict, mock_db)
 
-                assert result == {"message": "User deleted"}
-                mock_crud.delete.assert_called_once_with(db=mock_db, email=email)
-                mock_blacklist.assert_called_once_with(token=token, db=mock_db)
+            assert result == {"message": "User deleted"}
+            mock_crud.delete.assert_called_once_with(db=mock_db, email=email)
 
     @pytest.mark.asyncio
     async def test_erase_user_not_found(self, mock_db, current_user_dict):
         """Test user deletion when user doesn't exist."""
         email = "nonexistent_user@example.com"
-        token = "mock_token"
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
             mock_crud.get = AsyncMock(return_value=None)
 
             with pytest.raises(NotFoundException, match="User not found"):
-                await erase_user(Mock(), email, current_user_dict, mock_db, token)
+                await erase_user(Mock(), email, current_user_dict, mock_db)
 
     @pytest.mark.asyncio
     async def test_erase_user_forbidden(self, mock_db, current_user_dict, sample_user_read):
@@ -254,13 +250,12 @@ class TestEraseUser:
         email = "different_user@example.com"
         user_dict = sample_user_read.model_dump()
         user_dict["email"] = email
-        token = "mock_token"
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
             mock_crud.get = AsyncMock(return_value=user_dict)
 
             with pytest.raises(ForbiddenException):
-                await erase_user(Mock(), email, current_user_dict, mock_db, token)
+                await erase_user(Mock(), email, current_user_dict, mock_db)
 
 
 class TestReadUsersMe:
@@ -282,28 +277,24 @@ class TestEraseDbUser:
         from src.app.api.v1.users import erase_db_user
 
         email = "user@example.com"
-        token = "mock_token"
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
             mock_crud.exists = AsyncMock(return_value=True)
             mock_crud.db_delete = AsyncMock(return_value=None)
 
-            with patch("src.app.api.v1.users.blacklist_token", new_callable=AsyncMock) as mock_blacklist:
-                result = await erase_db_user(Mock(), email, mock_db, token)
+            result = await erase_db_user(Mock(), email, mock_db)
 
         assert result == {"message": "User deleted from the database"}
         mock_crud.db_delete.assert_called_once_with(db=mock_db, email=email)
-        mock_blacklist.assert_called_once_with(token=token, db=mock_db)
 
     @pytest.mark.asyncio
     async def test_erase_db_user_not_found(self, mock_db):
         from src.app.api.v1.users import erase_db_user
 
         email = "missing@example.com"
-        token = "mock_token"
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
             mock_crud.exists = AsyncMock(return_value=False)
 
             with pytest.raises(NotFoundException, match="User not found"):
-                await erase_db_user(Mock(), email, mock_db, token)
+                await erase_db_user(Mock(), email, mock_db)

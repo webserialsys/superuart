@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: backend
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: backend
@@ -18,9 +18,19 @@ spec:
         - name: backend
           image: ghcr.io/webserialsys/superuart/backend:latest
           imagePullPolicy: Always
+          args:
+            - sh
+            - -c
+            - uv run --no-sync gunicorn src.app.main:app -w ${WEB_CONCURRENCY:-1} -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
           env:
             - name: RUN_MIGRATIONS
               value: "0"
+            - name: WEB_CONCURRENCY
+              value: "1"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           envFrom:
             - configMapRef:
                 name: superuart-config
@@ -28,6 +38,29 @@ spec:
                 name: superuart-secret
           ports:
             - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: apps/v1
 kind: Deployment

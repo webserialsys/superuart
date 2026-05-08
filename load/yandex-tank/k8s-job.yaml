@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yandex-tank-config
+data:
+  load.yaml: |
+    phantom:
+      enabled: true
+      address: backend
+      port: "8000"
+      load_profile:
+        load_type: rps
+        schedule: line(50, 800, 5m) const(800, 5m)
+      uris:
+        - /api/v1/health
+    console:
+      enabled: true
+    telegraf:
+      enabled: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yandex-tank-load
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: yandex-tank-load
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: yandex-tank
+          image: yandex/yandex-tank:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /var/loadtest
+          command:
+            - yandex-tank
+          args:
+            - -c
+            - /etc/yandex-tank/load.yaml
+          volumeMounts:
+            - name: tank-config
+              mountPath: /etc/yandex-tank
+              readOnly: true
+            - name: tank-workdir
+              mountPath: /var/loadtest
+      volumes:
+        - name: tank-config
+          configMap:
+            name: yandex-tank-config
+        - name: tank-workdir
+          emptyDir: {}

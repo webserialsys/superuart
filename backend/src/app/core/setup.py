@@ -15,6 +15,7 @@ from fastapi.openapi.utils import get_openapi
 from ..api.dependencies import get_current_superuser
 from ..middleware.client_cache_middleware import ClientCacheMiddleware
 from ..middleware.logger_middleware import LoggerMiddleware
+from ..middleware.metrics_middleware import PrometheusMetricsMiddleware, configure_app_info, metrics_response
 from ..models import *  # noqa: F403
 from .config import (
     AppSettings,
@@ -187,6 +188,8 @@ def create_application(
 
     application = FastAPI(lifespan=lifespan, **kwargs)
     application.include_router(router)
+    application.add_route("/metrics", metrics_response, include_in_schema=False)
+    configure_app_info(version=settings.APP_VERSION, environment=settings.ENVIRONMENT.value)
 
     if isinstance(settings, ClientSideCacheSettings):
         application.add_middleware(ClientCacheMiddleware, max_age=settings.CLIENT_CACHE_MAX_AGE)
@@ -200,6 +203,7 @@ def create_application(
             allow_headers=settings.CORS_HEADERS,
         )
     application.add_middleware(LoggerMiddleware)
+    application.add_middleware(PrometheusMetricsMiddleware, excluded_paths={"/metrics"})
     if isinstance(settings, EnvironmentSettings):
         if settings.ENVIRONMENT != EnvironmentOption.PRODUCTION:
             docs_router = APIRouter()

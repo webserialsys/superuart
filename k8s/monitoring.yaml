@@ -1,0 +1,748 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs:
+      - /metrics
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-state-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-state-metrics
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-state-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-state-metrics
+subjects:
+  - kind: ServiceAccount
+    name: kube-state-metrics
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - prometheus:9090
+
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets:
+              - kube-state-metrics:8080
+
+      - job_name: kubernetes-service-endpoints
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+            action: replace
+            target_label: __scheme__
+            regex: (https?)
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: service
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+      - job_name: kubernetes-nodes-cadvisor
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        kubernetes_sd_configs:
+          - role: node
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.4.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=7d
+            - --web.enable-lifecycle
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+              readOnly: true
+            - name: prometheus-data
+              mountPath: /prometheus
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app: kube-state-metrics
+    spec:
+      serviceAccountName: kube-state-metrics
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.15.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-state-metrics
+spec:
+  selector:
+    app: kube-state-metrics
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin
+type: Opaque
+stringData:
+  admin-user: "admin"
+  admin-password: "change-me-before-production"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-env
+data:
+  PROMETHEUS_URL: "http://prometheus:9090"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: Prometheus
+        type: prometheus
+        access: proxy
+        url: ${PROMETHEUS_URL}
+        isDefault: true
+        editable: true
+        jsonData:
+          httpMethod: POST
+          timeInterval: 15s
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: superuart
+        orgId: 1
+        folder: SuperUART
+        type: file
+        disableDeletion: false
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-superuart-app
+data:
+  superuart-app.json: |
+    {
+      "uid": "superuart-app",
+      "title": "SuperUART / Application",
+      "tags": ["superuart", "application"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "pod",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "Prometheus"},
+            "query": "label_values(superuart_http_requests_total, pod)",
+            "refresh": 2,
+            "multi": true,
+            "includeAll": true,
+            "current": {"selected": true, "text": "All", "value": "$__all"}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Requests by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (rate(superuart_http_requests_total{pod=~\"$pod\"}[5m]))",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "reqps"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "HTTP status by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod, status_code) (rate(superuart_http_requests_total{pod=~\"$pod\"}[5m]))",
+              "legendFormat": "{{pod}} {{status_code}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "reqps"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "P95 latency by pod and route",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le, pod, route) (rate(superuart_http_request_duration_seconds_bucket{pod=~\"$pod\"}[5m])))",
+              "legendFormat": "{{pod}} {{route}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "s"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "5xx errors by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (rate(superuart_http_requests_total{pod=~\"$pod\", status_code=~\"5..\"}[5m]))",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "reqps"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 5,
+          "type": "table",
+          "title": "Routes by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 9, "w": 24, "x": 0, "y": 16},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod, method, route, status_code) (rate(superuart_http_requests_total{pod=~\"$pod\"}[5m]))",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "In-progress requests by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 7, "w": 24, "x": 0, "y": 25},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod, method) (superuart_http_requests_in_progress{pod=~\"$pod\"})",
+              "legendFormat": "{{pod}} {{method}}"
+            }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-superuart-infra
+data:
+  superuart-infra.json: |
+    {
+      "uid": "superuart-infra",
+      "title": "SuperUART / Infrastructure",
+      "tags": ["superuart", "kubernetes", "infrastructure"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "Prometheus"},
+            "query": "label_values(kube_pod_info, namespace)",
+            "refresh": 2,
+            "current": {"selected": true, "text": "default", "value": "default"}
+          },
+          {
+            "name": "pod",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "Prometheus"},
+            "query": "label_values(kube_pod_info{namespace=\"$namespace\"}, pod)",
+            "refresh": 2,
+            "multi": true,
+            "includeAll": true,
+            "current": {"selected": true, "text": "All", "value": "$__all"}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Ready pods",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$pod\", condition=\"true\"})",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Restarts in 15m",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$pod\"}[15m]))",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Backend replicas",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "kube_deployment_status_replicas_available{namespace=\"$namespace\", deployment=\"backend\"}",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Prometheus targets up",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(up{namespace=\"$namespace\"})",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "CPU by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", container!=\"\", image!=\"\"}[5m]))",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "cores"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Memory by pod",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", container!=\"\", image!=\"\"})",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {"unit": "bytes"},
+            "overrides": []
+          }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "HPA backend replicas",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$namespace\", horizontalpodautoscaler=\"backend\"}",
+              "legendFormat": "current"
+            },
+            {
+              "refId": "B",
+              "expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace=\"$namespace\", horizontalpodautoscaler=\"backend\"}",
+              "legendFormat": "max"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "table",
+          "title": "Pod readiness",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$pod\", condition=\"true\"}",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:12.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: grafana-env
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: admin-user
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: admin-password
+            - name: GF_SERVER_ROOT_URL
+              value: "%(protocol)s://%(domain)s/grafana/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+            - name: grafana-provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+              subPath: dashboards.yaml
+              readOnly: true
+            - name: grafana-dashboard-superuart-app
+              mountPath: /var/lib/grafana/dashboards/superuart-app.json
+              subPath: superuart-app.json
+              readOnly: true
+            - name: grafana-dashboard-superuart-infra
+              mountPath: /var/lib/grafana/dashboards/superuart-infra.json
+              subPath: superuart-infra.json
+              readOnly: true
+      volumes:
+        - name: grafana-data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        - name: grafana-provisioning
+          configMap:
+            name: grafana-provisioning
+        - name: grafana-dashboard-superuart-app
+          configMap:
+            name: grafana-dashboard-superuart-app
+        - name: grafana-dashboard-superuart-infra
+          configMap:
+            name: grafana-dashboard-superuart-infra
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
