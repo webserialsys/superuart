@@ -240,17 +240,19 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: telemetry
+              containerPort: 8081
           readinessProbe:
             httpGet:
               path: /readyz
-              port: http
+              port: telemetry
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
           livenessProbe:
             httpGet:
-              path: /livez
-              port: http
+              path: /readyz
+              port: telemetry
             initialDelaySeconds: 15
             periodSeconds: 20
             timeoutSeconds: 3
@@ -281,7 +283,7 @@ metadata:
 type: Opaque
 stringData:
   admin-user: "admin"
-  admin-password: "change-me-before-production"
+  admin-password: "admin"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -563,7 +565,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", container!=\"\", image!=\"\"}[5m]))",
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\"}[5m]))",
               "legendFormat": "{{pod}}"
             }
           ],
@@ -581,7 +583,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", container!=\"\", image!=\"\"})",
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\"})",
               "legendFormat": "{{pod}}"
             }
           ],

@@ -43,7 +43,7 @@ http://127.0.0.1:9090/targets
 Default credentials are stored in the `grafana-admin` Secret:
 
 ```text
-admin / change-me-before-production
+admin / admin
 ```
 
 Change them if you expose Grafana outside your local Minikube network.
