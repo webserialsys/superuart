@@ -55,7 +55,7 @@ frontend/  Next.js-приложение, API-клиент, UI-компонент
 
 ```bash
 cd backend
-cp src/.env.example src/.env
+cp .env.example .env
 docker compose up --build web worker db redis
 ```
 
@@ -85,7 +85,7 @@ Frontend будет доступен по адресу:
 
 ```bash
 cd backend
-cp src/.env.example src/.env
+cp .env.example src/.env
 uv sync --extra dev --group dev
 cd src
 uv run alembic upgrade head
@@ -96,6 +96,11 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 - в этом режиме PostgreSQL и Redis должны быть доступны с хоста;
 - при необходимости поправьте `POSTGRES_SERVER`, `POSTGRES_PORT`, `REDIS_*` в `backend/src/.env`.
+
+## DevOps лабораторные
+
+- Лабораторная работа 3: Kubernetes, HPA, Prometheus, Grafana и GHCR описаны в `lab3.md`.
+- Лабораторная работа 4: SonarQube, Quality Gate, Argo CD и Telegram описаны в `lab4.md`.
 
 ## Тесты ✅
 
