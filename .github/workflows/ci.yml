@@ -9,13 +9,15 @@ on:
     paths:
       - "backend/**"
       - "frontend/**"
-      - "sonar-project.properties"
+      - "backend/sonar-project.properties"
+      - "frontend/sonar-project.properties"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
       - "backend/**"
       - "frontend/**"
-      - "sonar-project.properties"
+      - "backend/sonar-project.properties"
+      - "frontend/sonar-project.properties"
       - ".github/workflows/ci.yml"
   workflow_dispatch:
 
@@ -117,28 +119,21 @@ jobs:
           path: backend
 
       - name: Scan backend with SonarQube
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v8
         with:
-          args: >
-            -Dsonar.projectKey=superuart-backend
-            -Dsonar.projectName=SuperUART Backend
-            -Dsonar.sources=backend/src/app
-            -Dsonar.tests=backend/tests
-            -Dsonar.exclusions=**/__pycache__/**,**/coverage/**,**/dist/**,**/*.lock,backend/src/migrations/**
-            -Dsonar.coverage.exclusions=backend/src/migrations/**,backend/src/app/core/db/models.py
-            -Dsonar.python.version=3.11
-            -Dsonar.python.coverage.reportPaths=backend/coverage.xml
-            -Dsonar.qualitygate.wait=true
+          projectBaseDir: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
       - name: Check backend Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
+        with:
+          scanMetadataReportFile: backend/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
   backend-build:
     name: Backend build
@@ -212,28 +207,21 @@ jobs:
           path: frontend/coverage
 
       - name: Scan frontend with SonarQube
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v8
         with:
-          args: >
-            -Dsonar.projectKey=superuart-frontend
-            -Dsonar.projectName=SuperUART Frontend
-            -Dsonar.sources=frontend/src/app,frontend/src/components,frontend/src/hooks,frontend/src/lib,frontend/src/providers,frontend/src/types
-            -Dsonar.tests=frontend/src
-            -Dsonar.exclusions=**/.next/**,**/node_modules/**,**/coverage/**,**/dist/**,**/*.lock,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
-            -Dsonar.test.inclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
-            -Dsonar.coverage.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/*.d.ts
-            -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
-            -Dsonar.qualitygate.wait=true
+          projectBaseDir: frontend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
       - name: Check frontend Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
+        with:
+          scanMetadataReportFile: frontend/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
   frontend-build:
     name: Frontend build
