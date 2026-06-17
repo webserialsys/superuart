@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: superuart
+  name: superuart-root
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/webserialsys/superuart.git
     targetRevision: main
-    path: k8s
+    path: argocd
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
