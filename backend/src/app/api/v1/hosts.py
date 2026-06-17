@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Request
 from fastcrud import PaginatedListResponse, compute_offset, paginated_response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...api.dependencies import require_roles
+from ...api.dependencies import CurrentUser, require_roles
 from ...core.db.database import async_get_db
-from ...core.exceptions.http_exceptions import DuplicateValueException, NotFoundException
+from ...core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
 from ...core.security import get_password_hash
 from ...crud.crud_hosts import crud_hosts
 from ...models.enums import UserRole
@@ -21,7 +21,7 @@ router = APIRouter(tags=["hosts"])
 async def write_host(
     request: Request,
     host: HostCreate,
-    current_user: Annotated[dict, Depends(require_roles(UserRole.TEACHER))],
+    current_user: Annotated[CurrentUser, Depends(require_roles(UserRole.TEACHER))],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, Any]:
     if await crud_hosts.exists(db=db, name=host.name, is_deleted=False):
@@ -33,6 +33,8 @@ async def write_host(
     user_uuid = current_user.get("uuid")
     if isinstance(user_uuid, str):
         user_uuid = uuid_pkg.UUID(user_uuid)
+    elif not isinstance(user_uuid, uuid_pkg.UUID):
+        raise ForbiddenException("Current user UUID is invalid")
 
     host_internal = HostCreateInternal(**host.model_dump(), api_key_hash=api_key_hash, user_uuid=user_uuid)
     created_host = await crud_hosts.create(db=db, object=host_internal, schema_to_select=HostRead)
@@ -43,10 +45,12 @@ async def write_host(
     return {"host": created_host, "api_key": api_key}
 
 
-@router.get("/hosts", response_model=PaginatedListResponse[HostRead], dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.get(
+    "/hosts", response_model=PaginatedListResponse[HostRead], dependencies=[Depends(require_roles(UserRole.TEACHER))]
+)
 async def read_hosts(
     request: Request, db: Annotated[AsyncSession, Depends(async_get_db)], page: int = 1, items_per_page: int = 10
-) -> dict:
+) -> dict[str, Any]:
     hosts_data = await crud_hosts.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),

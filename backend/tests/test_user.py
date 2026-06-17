@@ -59,6 +59,7 @@ class TestWriteUser:
                 with pytest.raises(NotFoundException, match="Failed to create user"):
                     await write_user(Mock(), user_create, mock_db)
 
+
 class TestReadUser:
     """Test user retrieval endpoint."""
 

@@ -2,42 +2,144 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "*"
     paths:
       - "backend/**"
       - "frontend/**"
+      - "backend/sonar-project.properties"
+      - "frontend/sonar-project.properties"
+      - ".github/workflows/ci.yml"
   pull_request:
     paths:
       - "backend/**"
       - "frontend/**"
+      - "backend/sonar-project.properties"
+      - "frontend/sonar-project.properties"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 jobs:
   backend-test:
     name: Backend test
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: 1234
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
-        working-directory: frontend
+        working-directory: backend
+    env:
+      APP_NAME: "Super UART"
+      APP_VERSION: "0.1"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_SERVER: 127.0.0.1
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+      POSTGRES_ASYNC_PREFIX: postgresql+asyncpg://
+      SECRET_KEY: ci-secret-key
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      ADMIN_NAME: ci-admin
+      ADMIN_EMAIL: ci-admin@example.com
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: Qwerty123!
+      REDIS_CACHE_HOST: 127.0.0.1
+      REDIS_CACHE_PORT: 6379
+      REDIS_QUEUE_HOST: 127.0.0.1
+      REDIS_QUEUE_PORT: 6379
+      REDIS_RATE_LIMIT_HOST: 127.0.0.1
+      REDIS_RATE_LIMIT_PORT: 6379
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      CORS_METHODS: '["*"]'
+      CORS_HEADERS: '["*"]'
+      ENVIRONMENT: local
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          bun-version: "1.3.1"
+          python-version: "3.11"
 
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
 
-      - name: Run frontend unit tests
-        run: bun run test
+      - name: Install backend dependencies
+        run: uv sync --locked --extra dev --group dev
+
+      - name: Run backend unit tests with coverage
+        run: uv run pytest tests --cov=src/app --cov-report=xml:coverage.xml --cov-report=term
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  sonar-backend:
+    name: SonarQube backend
+    runs-on: ubuntu-latest
+    needs:
+      - backend-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend
+
+      - name: Scan backend with SonarQube
+        uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          projectBaseDir: backend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+      - name: Check backend Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        with:
+          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
   backend-build:
     name: Backend build
     runs-on: ubuntu-latest
     needs:
-      - backend-test
+      - sonar-backend
     defaults:
       run:
         working-directory: backend
@@ -78,14 +180,54 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run frontend unit tests
-        run: bun run test
+      - name: Run frontend unit tests with coverage
+        run: bun run test:coverage
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
+
+  sonar-frontend:
+    name: SonarQube frontend
+    runs-on: ubuntu-latest
+    needs:
+      - frontend-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+      - name: Scan frontend with SonarQube
+        uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          projectBaseDir: frontend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+      - name: Check frontend Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        with:
+          scanMetadataReportFile: frontend/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
     needs:
-      - frontend-test
+      - sonar-frontend
     defaults:
       run:
         working-directory: frontend
@@ -103,3 +245,112 @@ jobs:
 
       - name: Build frontend
         run: bun run build
+
+  docker-build-backend:
+    name: Docker build backend
+    runs-on: ubuntu-latest
+    needs:
+      - backend-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/superuart/backend
+          tags: |
+            type=ref,event=tag
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  docker-build-frontend:
+    name: Docker build frontend
+    runs-on: ubuntu-latest
+    needs:
+      - frontend-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/superuart/frontend
+          tags: |
+            type=ref,event=tag
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: runner
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  notify:
+    name: Telegram notification
+    runs-on: ubuntu-latest
+    needs:
+      - backend-test
+      - sonar-backend
+      - backend-build
+      - frontend-test
+      - sonar-frontend
+      - frontend-build
+      - docker-build-backend
+      - docker-build-frontend
+    if: always()
+    steps:
+      - name: Send workflow status
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RESULT: ${{ contains(needs.*.result, 'failure') && 'failed' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'passed' }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Telegram secrets are not configured, skipping notification."
+            exit 0
+          fi
+          SHORT_SHA="${COMMIT_SHA::7}"
+          TEXT="SuperUART CI ${RESULT}%0ABranch: ${BRANCH}%0ACommit: ${SHORT_SHA}%0A${RUN_URL}"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${TEXT}"

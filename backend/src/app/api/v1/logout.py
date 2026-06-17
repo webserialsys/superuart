@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, Response
 
@@ -11,8 +11,8 @@ router = APIRouter(tags=["login"])
 @router.post("/logout")
 async def logout(
     response: Response,
-    access_token: str = Depends(oauth2_scheme),
-    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+    access_token: Annotated[str, Depends(oauth2_scheme)],
+    refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
 ) -> dict[str, str]:
     if not refresh_token:
         raise UnauthorizedException("Refresh token not found")

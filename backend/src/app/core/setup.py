@@ -2,9 +2,9 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
 from typing import Any
 
-import anyio
 import fastapi
 import redis.asyncio as redis
+from anyio.to_thread import current_default_thread_limiter
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, FastAPI
@@ -26,6 +26,7 @@ from .config import (
     EnvironmentSettings,
     RedisCacheSettings,
     RedisQueueSettings,
+    Settings,
     settings,
 )
 from .db.database import Base
@@ -62,20 +63,12 @@ async def close_redis_queue_pool() -> None:
 
 # -------------- application --------------
 async def set_threadpool_tokens(number_of_tokens: int = 100) -> None:
-    limiter = anyio.to_thread.current_default_thread_limiter()
+    limiter = current_default_thread_limiter()
     limiter.total_tokens = number_of_tokens
 
 
 def lifespan_factory(
-    settings: (
-        DatabaseSettings
-        | RedisCacheSettings
-        | AppSettings
-        | ClientSideCacheSettings
-        | CORSSettings
-        | RedisQueueSettings
-        | EnvironmentSettings
-    ),
+    settings: Settings,
     create_tables_on_start: bool = True,
 ) -> Callable[[FastAPI], _AsyncGeneratorContextManager[Any]]:
     """Factory to create a lifespan async context manager for a FastAPI app."""
@@ -116,15 +109,7 @@ def lifespan_factory(
 # -------------- application --------------
 def create_application(
     router: APIRouter,
-    settings: (
-        DatabaseSettings
-        | RedisCacheSettings
-        | AppSettings
-        | ClientSideCacheSettings
-        | CORSSettings
-        | RedisQueueSettings
-        | EnvironmentSettings
-    ),
+    settings: Settings,
     create_tables_on_start: bool = True,
     lifespan: Callable[[FastAPI], _AsyncGeneratorContextManager[Any]] | None = None,
     **kwargs: Any,

@@ -8,7 +8,7 @@ from fastcrud import PaginatedListResponse, compute_offset, paginated_response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...api.dependencies import get_current_user
+from ...api.dependencies import CurrentUser, get_current_user
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import ForbiddenException, NotFoundException
 from ...core.utils.cache import async_get_redis
@@ -25,7 +25,7 @@ SESSION_MAX_DURATION = timedelta(minutes=30)
 DISCONNECT_GRACE_PERIOD = timedelta(minutes=5)
 
 
-def _is_teacher(user: dict) -> bool:
+def _is_teacher(user: CurrentUser) -> bool:
     role = user.get("role")
     return role in {UserRole.TEACHER, UserRole.TEACHER.value}
 
@@ -66,11 +66,13 @@ def _device_session_key(device_uuid: uuid_pkg.UUID) -> str:
     return f"{DEVICE_SESSION_PREFIX}:{device_uuid}"
 
 
-def _decode_redis_value(value: bytes | str | None) -> str | None:
+def _decode_redis_value(value: bytes | bytearray | memoryview | str | None) -> str | None:
     if value is None:
         return None
     if isinstance(value, bytes):
         return value.decode()
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value).decode()
     return value
 
 
@@ -96,7 +98,7 @@ def _encode_device_lock(
     return json.dumps(payload)
 
 
-def _decode_device_lock(value: bytes | str | None) -> dict[str, str | None] | None:
+def _decode_device_lock(value: bytes | bytearray | memoryview | str | None) -> dict[str, str | None] | None:
     raw = _decode_redis_value(value)
     if raw is None:
         return None
@@ -146,7 +148,9 @@ def _normalize_requested_expiry(expires_at: datetime | None, now: datetime) -> d
     return requested_expiry if requested_expiry <= max_expiry else max_expiry
 
 
-def _cap_existing_expiry(expires_at: datetime | str | None, created_at: datetime | str | None, now: datetime) -> datetime:
+def _cap_existing_expiry(
+    expires_at: datetime | str | None, created_at: datetime | str | None, now: datetime
+) -> datetime:
     base_created_at = _normalize_datetime(created_at) or now
     max_expiry = base_created_at + SESSION_MAX_DURATION
     effective_expiry = _normalize_datetime(expires_at) or max_expiry
@@ -242,7 +246,11 @@ async def _set_device_status(db: AsyncSession, device_uuid: uuid_pkg.UUID, statu
         return
     if _status_is_unavailable(db_device.get("status")) and status != DeviceStatus.UNAVAILABLE:
         return
-    await crud_devices.update(db=db, object=DeviceUpdate(status=status), uuid=device_uuid)
+    await crud_devices.update(
+        db=db,
+        object=DeviceUpdate(name=None, port=None, baudrate=None, status=status, host_uuid=None),
+        uuid=device_uuid,
+    )
 
 
 async def _expire_session(db: AsyncSession, redis: Redis, session: dict[str, Any]) -> bool:
@@ -257,7 +265,18 @@ async def _expire_session(db: AsyncSession, redis: Redis, session: dict[str, Any
     session_uuid = _normalize_uuid(str(session_uuid_raw))
     device_uuid = _normalize_uuid(str(device_uuid_raw))
 
-    await crud_sessions.update(db=db, object=SessionUpdate(status=SessionStatus.EXPIRED), uuid=session_uuid)
+    await crud_sessions.update(
+        db=db,
+        object=SessionUpdate(
+            status=SessionStatus.EXPIRED,
+            connection_id=None,
+            locked_at=None,
+            expires_at=None,
+            user_uuid=None,
+            device_uuid=None,
+        ),
+        uuid=session_uuid,
+    )
 
     key = _device_session_key(device_uuid)
     lock = _decode_device_lock(await redis.get(key))
@@ -309,7 +328,7 @@ async def _expire_session_if_needed(db: AsyncSession, redis: Redis, session: dic
 async def write_session(
     request: Request,
     session: SessionCreate,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
 ) -> dict[str, Any]:
@@ -350,20 +369,27 @@ async def write_session(
                 raise ForbiddenException("Device is busy")
 
             active_session_uuid = _normalize_uuid(str(active_session_uuid_raw))
-            active_expires_at = _cap_existing_expiry(active_session.get("expires_at"), active_session.get("created_at"), now)
+            active_expires_at = _cap_existing_expiry(
+                active_session.get("expires_at"), active_session.get("created_at"), now
+            )
             if active_expires_at <= now:
                 await _expire_session(db=db, redis=redis, session=active_session)
             else:
                 await crud_sessions.update(
                     db=db,
                     object=SessionUpdate(
+                        status=None,
                         connection_id=session_internal.connection_id,
                         locked_at=now,
                         expires_at=active_expires_at,
+                        user_uuid=None,
+                        device_uuid=None,
                     ),
                     uuid=active_session_uuid,
                 )
-                refreshed_session = await crud_sessions.get(db=db, uuid=active_session_uuid, schema_to_select=SessionRead)
+                refreshed_session = await crud_sessions.get(
+                    db=db, uuid=active_session_uuid, schema_to_select=SessionRead
+                )
                 if refreshed_session is None:
                     raise NotFoundException("Session not found")
 
@@ -438,11 +464,11 @@ async def write_session(
 @router.get("/sessions", response_model=PaginatedListResponse[SessionRead])
 async def read_sessions(
     request: Request,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     page: int = 1,
     items_per_page: int = 10,
-) -> dict:
+) -> dict[str, Any]:
     filters: dict[str, Any] = {"is_deleted": False}
     if not _is_teacher(current_user):
         filters["user_uuid"] = _normalize_uuid(current_user["uuid"])
@@ -463,7 +489,7 @@ async def read_sessions(
 async def read_session(
     request: Request,
     session_uuid: uuid_pkg.UUID,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, Any]:
     filters: dict[str, Any] = {"uuid": session_uuid, "is_deleted": False}
@@ -482,7 +508,7 @@ async def update_session(
     request: Request,
     values: SessionUpdate,
     session_uuid: uuid_pkg.UUID,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
 ) -> dict[str, Any]:
@@ -527,7 +553,7 @@ async def update_session(
 async def erase_session(
     request: Request,
     session_uuid: uuid_pkg.UUID,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
 ) -> dict[str, str]:

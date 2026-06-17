@@ -11,7 +11,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: migrate
-          image: ghcr.io/webserialsys/superuart/backend:latest
+          image: ghcr.io/webserialsys/superuart/backend:sha-c66d2c0
           imagePullPolicy: Always
           args:
             - migrate

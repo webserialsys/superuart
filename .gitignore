@@ -3,6 +3,9 @@ doc
 .pytest*
 .mypy*
 .uv-cache/
+coverage/
+coverage.xml
+htmlcov/
 .env
 .terraform/
 *.tfstate

@@ -4,6 +4,8 @@ import random
 import uuid as uuid_pkg
 from datetime import UTC, datetime
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,8 +99,8 @@ async def _expire_lock_session_if_needed(
 async def mock_uart(
     websocket: WebSocket,
     device_uuid: str,
-    redis: Redis = Depends(async_get_redis),
-    db: AsyncSession = Depends(async_get_db),
+    redis: Annotated[Redis, Depends(async_get_redis)],
+    db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> None:
     connection_id_raw = websocket.query_params.get("connection_id")
     baudrate_raw = websocket.query_params.get("baudrate")

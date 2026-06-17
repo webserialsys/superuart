@@ -40,12 +40,12 @@ class SessionCreateInternal(SessionBase):
 class SessionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: Annotated[SessionStatus | None, Field(default=None)]
-    connection_id: Annotated[uuid_pkg.UUID | None, Field(default=None)]
-    locked_at: Annotated[datetime | None, Field(default=None)]
-    expires_at: Annotated[datetime | None, Field(default=None)]
-    user_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
-    device_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
+    status: SessionStatus | None = Field(default=None)
+    connection_id: uuid_pkg.UUID | None = Field(default=None)
+    locked_at: datetime | None = Field(default=None)
+    expires_at: datetime | None = Field(default=None)
+    user_uuid: uuid_pkg.UUID | None = Field(default=None)
+    device_uuid: uuid_pkg.UUID | None = Field(default=None)
 
 
 class SessionUpdateInternal(SessionUpdate):
