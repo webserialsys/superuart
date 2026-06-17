@@ -94,6 +94,7 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Примечания:
 
+- backend рассчитан на Python `3.11`-`3.13`; если `uv` подхватил более новый интерпретатор, используйте `uv sync --python 3.11 --extra dev --group dev`;
 - в этом режиме PostgreSQL и Redis должны быть доступны с хоста;
 - при необходимости поправьте `POSTGRES_SERVER`, `POSTGRES_PORT`, `REDIS_*` в `backend/src/.env`.
 

@@ -99,7 +99,7 @@ async def test_write_session_busy_device(mock_db, mock_redis):
     )
 
     mock_redis.get = AsyncMock(
-        return_value=f'{{\"user_uuid\":\"{other_user_uuid}\",\"connection_id\":\"{uuid7()}\"}}',
+        return_value=f'{{"user_uuid":"{other_user_uuid}","connection_id":"{uuid7()}"}}',
     )
 
     with (

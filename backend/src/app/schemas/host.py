@@ -47,8 +47,8 @@ class HostCreateInternal(HostInternalBase):
 class HostUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
-    status: Annotated[HostStatus | None, Field(default=None)]
+    name: str | None = Field(min_length=2, max_length=120, default=None)
+    status: HostStatus | None = Field(default=None)
 
 
 class HostUpdateInternal(HostUpdate):

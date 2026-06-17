@@ -8,16 +8,16 @@ from redis.asyncio import Redis
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...api.dependencies import get_current_user, require_roles
+from ...api.dependencies import CurrentUser, get_current_user, require_roles
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import DuplicateValueException, NotFoundException
 from ...core.utils.cache import async_get_redis
 from ...crud.crud_devices import crud_devices
-from ...models.session import Session
-from ...models.user import User
 from ...models.access import Access
 from ...models.device import Device
 from ...models.enums import DeviceStatus, SessionStatus, UserRole
+from ...models.session import Session
+from ...models.user import User
 from ...schemas.device import (
     DeviceAvailabilityRead,
     DeviceCreateInternal,
@@ -93,7 +93,9 @@ async def _build_occupancy(
     return occupied_by_device, expired_device_ids
 
 
-@router.post("/device", response_model=DeviceRead, status_code=201, dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.post(
+    "/device", response_model=DeviceRead, status_code=201, dependencies=[Depends(require_roles(UserRole.TEACHER))]
+)
 async def write_device(
     request: Request, device: DeviceTeacherCreate, db: Annotated[AsyncSession, Depends(async_get_db)]
 ) -> dict[str, Any]:
@@ -121,12 +123,12 @@ async def write_device(
 )
 async def read_devices(
     request: Request,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
     page: int = 1,
     items_per_page: int = 10,
-) -> dict:
+) -> dict[str, Any]:
     devices_data = await crud_devices.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),
@@ -189,7 +191,7 @@ async def read_devices(
 @router.get("/devices/available", response_model=list[DeviceAvailabilityRead])
 async def read_available_devices(
     request: Request,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
     redis: Annotated[Redis, Depends(async_get_redis)],
 ) -> list[DeviceAvailabilityRead]:

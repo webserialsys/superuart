@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request
@@ -11,11 +12,12 @@ from ..crud.crud_users import crud_users
 from ..models.enums import UserRole
 
 logger = logging.getLogger(__name__)
+CurrentUser = dict[str, Any]
 
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: Annotated[AsyncSession, Depends(async_get_db)]
-) -> dict[str, Any]:
+) -> CurrentUser:
     token_data = await verify_token(token, TokenType.ACCESS)
     if token_data is None:
         raise UnauthorizedException("User not authenticated.")
@@ -28,7 +30,9 @@ async def get_current_user(
     raise UnauthorizedException("User not authenticated.")
 
 
-async def get_optional_user(request: Request, db: AsyncSession = Depends(async_get_db)) -> dict | None:
+async def get_optional_user(
+    request: Request, db: Annotated[AsyncSession, Depends(async_get_db)]
+) -> CurrentUser | None:
     token = request.headers.get("Authorization")
     if not token:
         return None
@@ -54,16 +58,16 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(async_g
         return None
 
 
-async def get_current_superuser(current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
+async def get_current_superuser(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
     if current_user.get("is_superuser", False):
         return current_user
     raise ForbiddenException("You do not have enough privileges.")
 
 
-def require_roles(*roles: UserRole) -> callable:
+def require_roles(*roles: UserRole) -> Callable[[CurrentUser], Awaitable[CurrentUser]]:
     role_values = {role.value for role in roles}
 
-    async def _require(current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
+    async def _require(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
         role = current_user.get("role")
         if current_user.get("is_superuser", False):
             return current_user

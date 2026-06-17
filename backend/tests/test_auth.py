@@ -61,7 +61,7 @@ class TestRefreshAccessToken:
         request = Mock(cookies={})
 
         with pytest.raises(UnauthorizedException, match="Refresh token missing."):
-            await refresh_access_token(request, mock_db)
+            await refresh_access_token(request)
 
     @pytest.mark.asyncio
     async def test_refresh_invalid_token(self, mock_db):
@@ -72,7 +72,7 @@ class TestRefreshAccessToken:
             mock_verify.return_value = None
 
             with pytest.raises(UnauthorizedException, match="Invalid refresh token."):
-                await refresh_access_token(request, mock_db)
+                await refresh_access_token(request)
 
     @pytest.mark.asyncio
     async def test_refresh_success(self, mock_db):
@@ -85,7 +85,7 @@ class TestRefreshAccessToken:
             with patch("src.app.api.v1.login.create_access_token", new_callable=AsyncMock) as mock_create_access:
                 mock_create_access.return_value = "new-access-token"
 
-                result = await refresh_access_token(request, mock_db)
+                result = await refresh_access_token(request)
 
         assert result == {"access_token": "new-access-token", "token_type": "bearer"}
         mock_verify.assert_called_once()

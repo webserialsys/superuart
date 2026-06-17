@@ -2,9 +2,10 @@
 import uuid
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 
 class LoggerMiddleware(BaseHTTPMiddleware):
@@ -16,7 +17,7 @@ class LoggerMiddleware(BaseHTTPMiddleware):
         The FastAPI application instance.
     """
 
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:

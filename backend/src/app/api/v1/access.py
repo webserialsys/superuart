@@ -15,7 +15,9 @@ from ...schemas.access import AccessCreate, AccessCreateInternal, AccessRead, Ac
 router = APIRouter(tags=["access"])
 
 
-@router.post("/access", response_model=AccessRead, status_code=201, dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.post(
+    "/access", response_model=AccessRead, status_code=201, dependencies=[Depends(require_roles(UserRole.TEACHER))]
+)
 async def write_access(
     request: Request, access: AccessCreate, db: Annotated[AsyncSession, Depends(async_get_db)]
 ) -> dict[str, Any]:
@@ -31,10 +33,14 @@ async def write_access(
     return created_access
 
 
-@router.get("/accesses", response_model=PaginatedListResponse[AccessRead], dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.get(
+    "/accesses",
+    response_model=PaginatedListResponse[AccessRead],
+    dependencies=[Depends(require_roles(UserRole.TEACHER))],
+)
 async def read_accesses(
     request: Request, db: Annotated[AsyncSession, Depends(async_get_db)], page: int = 1, items_per_page: int = 10
-) -> dict:
+) -> dict[str, Any]:
     accesses_data = await crud_access.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),
@@ -57,7 +63,9 @@ async def read_access(
     return db_access
 
 
-@router.patch("/access/{access_uuid}", response_model=AccessRead, dependencies=[Depends(require_roles(UserRole.TEACHER))])
+@router.patch(
+    "/access/{access_uuid}", response_model=AccessRead, dependencies=[Depends(require_roles(UserRole.TEACHER))]
+)
 async def update_access(
     request: Request,
     values: AccessUpdate,

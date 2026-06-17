@@ -13,7 +13,7 @@ class UserBase(BaseModel):
 
 
 class UserRoleSchema(BaseModel):
-    role: Annotated[UserRole, Field(default=UserRole.STUDENT, examples=["student"])]
+    role: UserRole = Field(default=UserRole.STUDENT, examples=["student"])
 
 
 class User(TimestampSchema, UserBase, UUIDSchema, UserRoleSchema, PersistentDeletion):
@@ -38,8 +38,8 @@ class UserCreateInternal(UserBase):
 class UserUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    email: Annotated[EmailStr | None, Field(examples=["piter@example.com"], default=None)]
-    full_name: Annotated[str | None, Field(min_length=2, max_length=100, examples=["Piter Parker"], default=None)]
+    email: EmailStr | None = Field(examples=["piter@example.com"], default=None)
+    full_name: str | None = Field(min_length=2, max_length=100, examples=["Piter Parker"], default=None)
 
 
 class UserUpdateInternal(UserUpdate):

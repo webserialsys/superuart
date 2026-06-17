@@ -10,8 +10,8 @@ from ..core.schemas import UUIDSchema
 class AccessBase(BaseModel):
     user_uuid: Annotated[uuid_pkg.UUID, Field(examples=["01950a71-4f98-7d34-b5b5-8f6f8c2c0e4a"])]
     device_uuid: Annotated[uuid_pkg.UUID, Field(examples=["01950a71-4f98-7d34-b5b5-8f6f8c2c0e4a"])]
-    granted_at: Annotated[datetime, Field(default_factory=lambda: datetime.now(UTC))]
-    expires_at: Annotated[datetime | None, Field(default=None)]
+    granted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime | None = Field(default=None)
 
 
 class Access(AccessBase, UUIDSchema):
@@ -33,7 +33,7 @@ class AccessCreateInternal(AccessBase):
 class AccessUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    expires_at: Annotated[datetime | None, Field(default=None)]
+    expires_at: datetime | None = Field(default=None)
 
 
 class AccessUpdateInternal(AccessUpdate):

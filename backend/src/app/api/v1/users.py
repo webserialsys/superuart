@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastcrud import PaginatedListResponse, compute_offset, paginated_response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...api.dependencies import get_current_superuser, get_current_user, require_roles
+from ...api.dependencies import CurrentUser, get_current_superuser, get_current_user, require_roles
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
 from ...core.security import get_password_hash
@@ -43,7 +43,7 @@ async def write_user(
 )
 async def read_users(
     request: Request, db: Annotated[AsyncSession, Depends(async_get_db)], page: int = 1, items_per_page: int = 10
-) -> dict:
+) -> dict[str, Any]:
     users_data = await crud_users.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),
@@ -57,7 +57,7 @@ async def read_users(
 
 
 @router.get("/user/me/", response_model=UserRead)
-async def read_users_me(request: Request, current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
+async def read_users_me(request: Request, current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
     return current_user
 
 
@@ -65,7 +65,7 @@ async def read_users_me(request: Request, current_user: Annotated[dict, Depends(
 async def read_user(
     request: Request,
     email: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, Any]:
     role = current_user.get("role")
@@ -85,7 +85,7 @@ async def patch_user(
     request: Request,
     values: UserUpdate,
     email: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, str]:
     db_user = await crud_users.get(db=db, email=email)
@@ -109,7 +109,7 @@ async def patch_user(
 async def erase_user(
     request: Request,
     email: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, str]:
     db_user = await crud_users.get(db=db, email=email, schema_to_select=UserRead)

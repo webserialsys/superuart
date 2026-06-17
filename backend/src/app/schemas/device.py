@@ -25,11 +25,11 @@ class DeviceRead(DeviceBase, UUIDSchema, TimestampSchema):
 
 
 class DeviceAvailabilityRead(DeviceRead):
-    occupied_by_user_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
-    occupied_by_label: Annotated[str | None, Field(default=None)]
-    occupied_by_you: Annotated[bool, Field(default=False)]
-    active_session_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
-    active_session_expires_at: Annotated[datetime | None, Field(default=None)]
+    occupied_by_user_uuid: uuid_pkg.UUID | None = Field(default=None)
+    occupied_by_label: str | None = Field(default=None)
+    occupied_by_you: bool = Field(default=False)
+    active_session_uuid: uuid_pkg.UUID | None = Field(default=None)
+    active_session_expires_at: datetime | None = Field(default=None)
 
 
 class DeviceCreate(DeviceBase):
@@ -51,11 +51,11 @@ class DeviceTeacherCreate(BaseModel):
 class DeviceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
-    port: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
-    baudrate: Annotated[int | None, Field(default=None)]
-    status: Annotated[DeviceStatus | None, Field(default=None)]
-    host_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
+    name: str | None = Field(min_length=2, max_length=120, default=None)
+    port: str | None = Field(min_length=2, max_length=120, default=None)
+    baudrate: int | None = Field(default=None)
+    status: DeviceStatus | None = Field(default=None)
+    host_uuid: uuid_pkg.UUID | None = Field(default=None)
 
 
 class DeviceUpdateInternal(DeviceUpdate):
@@ -65,10 +65,10 @@ class DeviceUpdateInternal(DeviceUpdate):
 class DeviceTeacherUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
-    port: Annotated[str | None, Field(min_length=2, max_length=120, default=None)]
-    host_uuid: Annotated[uuid_pkg.UUID | None, Field(default=None)]
-    is_enabled: Annotated[bool | None, Field(default=None)]
+    name: str | None = Field(min_length=2, max_length=120, default=None)
+    port: str | None = Field(min_length=2, max_length=120, default=None)
+    host_uuid: uuid_pkg.UUID | None = Field(default=None)
+    is_enabled: bool | None = Field(default=None)
 
 
 class DeviceDelete(BaseModel):

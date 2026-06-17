@@ -1,9 +1,11 @@
 from collections.abc import Callable, Generator
+from datetime import datetime, UTC
+from importlib import import_module
+from importlib.util import find_spec
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from faker import Faker
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,23 @@ from sqlalchemy.orm.session import Session
 
 from src.app.core.config import settings
 from src.app.main import app
+
+faker_spec = find_spec("faker")
+if faker_spec is not None:
+    Faker = import_module("faker").Faker
+else:
+    class Faker:
+        def name(self) -> str:
+            return "Test User"
+
+        def email(self) -> str:
+            return "test@example.com"
+
+        def password(self) -> str:
+            return "Qwerty123!"
+
+        def date_time(self) -> datetime:
+            return datetime.now(UTC)
 
 DATABASE_URI = settings.POSTGRES_URI
 DATABASE_PREFIX = settings.POSTGRES_SYNC_PREFIX
@@ -80,12 +99,14 @@ def sample_user_read():
     """Generate a sample UserRead object."""
     from uuid6 import uuid7
 
+    from src.app.models.enums import UserRole
     from src.app.schemas.user import UserRead
 
     return UserRead(
         uuid=uuid7(),
         full_name=fake.name(),
         email=fake.email(),
+        role=UserRole.STUDENT,
         created_at=fake.date_time(),
         updated_at=fake.date_time(),
     )

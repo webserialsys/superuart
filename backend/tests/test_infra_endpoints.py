@@ -18,7 +18,7 @@ async def test_health_returns_healthy_payload():
     response = await health()
 
     assert response.status_code == 200
-    payload = response.body.decode("utf-8")
+    payload = bytes(response.body).decode("utf-8")
     assert '"status":"healthy"' in payload
     assert '"environment"' in payload
     assert '"version"' in payload
@@ -34,7 +34,7 @@ async def test_ready_returns_healthy_when_dependencies_ok():
         response = await ready(redis=Mock(), db=Mock())
 
     assert response.status_code == 200
-    payload = response.body.decode("utf-8")
+    payload = bytes(response.body).decode("utf-8")
     assert '"status":"healthy"' in payload
     assert '"database":"healthy"' in payload
     assert '"redis":"healthy"' in payload
@@ -49,7 +49,7 @@ async def test_ready_returns_unhealthy_when_dependency_fails():
         response = await ready(redis=Mock(), db=Mock())
 
     assert response.status_code == 503
-    payload = response.body.decode("utf-8")
+    payload = bytes(response.body).decode("utf-8")
     assert '"status":"unhealthy"' in payload
     assert '"database":"unhealthy"' in payload
     assert '"redis":"healthy"' in payload

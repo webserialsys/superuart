@@ -165,6 +165,8 @@ curl -X POST 'http://127.0.0.1:8000/api/v1/tasks/task?message=hello'
 uv sync && uv run uvicorn src.app.main:app --reload
 ```
 
+This project targets Python 3.11 through 3.13 for local development and CI. If your system default is newer, run `uv sync --python 3.11`.
+
 > Full setup (from-scratch, .env examples, PostgreSQL & Redis, gunicorn, nginx) lives in the [docs](https://benavlabs.github.io/FastAPI-boilerplate/getting-started/installation/).
 
 ## Configuration (minimal)
