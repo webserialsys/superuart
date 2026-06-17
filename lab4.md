@@ -35,7 +35,7 @@ admin / admin
 
 После входа нужно:
 
-1. Создать проект `superuart`.
+1. Создать проекты `superuart-backend` и `superuart-frontend` либо выдать token с правом создавать проекты при первом сканировании.
 2. Создать token для GitHub Actions.
 3. Добавить в GitHub Secrets:
    - `SONAR_TOKEN`;
@@ -45,7 +45,7 @@ admin / admin
 
 ## Quality Gate
 
-В SonarQube нужно создать Quality Gate для проекта `superuart`.
+В SonarQube нужно создать Quality Gate для проектов `superuart-backend` и `superuart-frontend`.
 
 Минимальные правила:
 
@@ -81,15 +81,34 @@ Workflow `CI` теперь состоит из отдельных jobs:
 | Job | Что делает |
 |---|---|
 | `Backend test` | Запускает backend unit tests и создает `coverage.xml` |
+| `SonarQube backend` | Отправляет backend-анализ в SonarQube и проверяет Quality Gate |
 | `Backend build` | Собирает backend package |
 | `Frontend test` | Запускает Vitest и создает `lcov.info` |
+| `SonarQube frontend` | Отправляет frontend-анализ в SonarQube и проверяет Quality Gate |
 | `Frontend build` | Собирает Next.js frontend |
-| `SonarQube` | Отправляет анализ в SonarQube и проверяет Quality Gate |
+| `Docker build backend` | На push тега собирает и публикует backend image в GHCR |
+| `Docker build frontend` | На push тега собирает и публикует frontend image в GHCR |
 | `Telegram notification` | Отправляет статус workflow в Telegram |
 
 Роль CI: проверить backend/frontend, собрать приложение и подтвердить качество кода через SonarQube. CI не разворачивает приложение в Kubernetes.
 
-## Docker Registry и GitOps release
+Порядок jobs:
+
+```text
+backend-test
+  -> sonar-backend
+    -> backend-build
+      -> frontend-test
+        -> sonar-frontend
+          -> frontend-build
+
+backend-build -> docker-build-backend   # only tag push
+frontend-build -> docker-build-frontend # only tag push
+
+all jobs -> notify
+```
+
+## Docker Registry
 
 Публикация Docker-образов выполняется в workflow:
 
@@ -97,15 +116,13 @@ Workflow `CI` теперь состоит из отдельных jobs:
 .github/workflows/ci.yml
 ```
 
-После успешных проверок `CI` на ветке `main` или при ручном запуске `workflow_dispatch` из ветки вычисляется общий тег релиза `sha-<short commit SHA>`.
-С этим тегом workflow собирает и отправляет в GHCR два образа:
+Docker jobs запускаются только на push Git tag. Тег Docker image совпадает с Git tag:
 
 ```text
-ghcr.io/webserialsys/superuart/backend:sha-<short-sha>
-ghcr.io/webserialsys/superuart/frontend:sha-<short-sha>
+ghcr.io/webserialsys/superuart/backend:<git-tag>
+ghcr.io/webserialsys/superuart/frontend:<git-tag>
 ```
 
-После публикации образов `CI` обновляет image tags в `k8s/deployment.yaml` и `k8s/migrate.yaml`, коммитит эти изменения обратно в Git и пушит в целевую ветку.
 Workflow не применяет Kubernetes-манифесты и не обращается к кластеру.
 
 ## Argo CD
@@ -214,8 +231,8 @@ superuart-root: Synced / Healthy
 
 | Компонент | Роль |
 |---|---|
-| CI | Проверяет код, запускает тесты, формирует coverage-отчеты и проверяет Quality Gate в SonarQube |
-| CI release jobs | Собирают и публикуют backend/frontend образы в GHCR, затем обновляют image tags в `k8s/` и коммитят изменения |
+| CI | Последовательно проверяет backend/frontend, запускает SonarQube jobs и собирает приложение |
+| Docker jobs | На push Git tag собирают и публикуют backend/frontend образы в GHCR |
 | Argo CD | Следит за Git-репозиторием и применяет Kubernetes-манифесты из `k8s/` в кластер |
 
 Ключевая идея GitOps: кластер приводится к состоянию, описанному в Git. Для изменения деплоя нужно изменить манифесты в репозитории, после чего Argo CD увидит расхождение и синхронизирует кластер.
@@ -224,15 +241,14 @@ Argo CD Image Updater в работе не используется.
 
 ## Image tags
 
-В `k8s/deployment.yaml` и `k8s/migrate.yaml` используются явные SHA-теги:
+В `k8s/deployment.yaml` и `k8s/migrate.yaml` используются явные теги образов:
 
 ```text
-ghcr.io/webserialsys/superuart/backend:sha-<short-sha>
-ghcr.io/webserialsys/superuart/frontend:sha-<short-sha>
+ghcr.io/webserialsys/superuart/backend:<tag>
+ghcr.io/webserialsys/superuart/frontend:<tag>
 ```
 
-Один тег используется для backend и frontend, потому что оба образа собираются из одного commit и образуют один релиз.
-Это делает Git источником истины: новая версия попадает в кластер только после того, как workflow закоммитил новый тег в Kubernetes-манифесты.
+Docker jobs публикуют образы с Git tag. Чтобы новая версия стала desired state для Argo CD, такой тег должен быть записан в Kubernetes-манифесты и закоммичен в Git.
 
 Если образ опубликован в GHCR, но `k8s/` не изменился, Argo CD не считает это новым desired state.
 
@@ -254,11 +270,11 @@ TELEGRAM_CHAT_ID
 
 ## Что показать на защите
 
-1. Открыть GitHub Actions и показать jobs `Backend test`, `Frontend test`, `SonarQube`.
+1. Открыть GitHub Actions и показать цепочку jobs `Backend test`, `SonarQube backend`, `Backend build`, `Frontend test`, `SonarQube frontend`, `Frontend build`.
 2. Открыть SonarQube и показать проект `superuart`.
 3. Показать Quality Gate с coverage `>= 80%`.
 4. Показать, что при провале Quality Gate CI завершается ошибкой.
-5. Открыть release jobs внутри workflow `CI` и показать публикацию образов в GHCR.
+5. Сделать push Git tag и показать jobs `Docker build backend` и `Docker build frontend`.
 6. Открыть Argo CD и показать Application `superuart-root`.
 7. Открыть Argo CD и показать Application `superuart`.
 8. В `superuart` показать source path `k8s/`, auto sync, prune и self-heal.

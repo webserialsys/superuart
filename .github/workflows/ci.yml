@@ -2,6 +2,10 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "*"
     paths:
       - "backend/**"
       - "frontend/**"
@@ -95,11 +99,52 @@ jobs:
           name: backend-coverage
           path: backend/coverage.xml
 
+  sonar-backend:
+    name: SonarQube backend
+    runs-on: ubuntu-latest
+    needs:
+      - backend-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend
+
+      - name: Scan backend with SonarQube
+        uses: SonarSource/sonarqube-scan-action@v5
+        with:
+          args: >
+            -Dsonar.projectKey=superuart-backend
+            -Dsonar.projectName=SuperUART Backend
+            -Dsonar.sources=backend/src/app
+            -Dsonar.tests=backend/tests
+            -Dsonar.exclusions=**/__pycache__/**,**/coverage/**,**/dist/**,**/*.lock,backend/src/migrations/**
+            -Dsonar.coverage.exclusions=backend/src/migrations/**,backend/src/app/core/db/models.py
+            -Dsonar.python.version=3.11
+            -Dsonar.python.coverage.reportPaths=backend/coverage.xml
+            -Dsonar.qualitygate.wait=true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Check backend Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
   backend-build:
     name: Backend build
     runs-on: ubuntu-latest
     needs:
-      - backend-test
+      - sonar-backend
     defaults:
       run:
         working-directory: backend
@@ -123,6 +168,8 @@ jobs:
   frontend-test:
     name: Frontend test
     runs-on: ubuntu-latest
+    needs:
+      - backend-build
     defaults:
       run:
         working-directory: frontend
@@ -147,11 +194,52 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/lcov.info
 
+  sonar-frontend:
+    name: SonarQube frontend
+    runs-on: ubuntu-latest
+    needs:
+      - frontend-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+      - name: Scan frontend with SonarQube
+        uses: SonarSource/sonarqube-scan-action@v5
+        with:
+          args: >
+            -Dsonar.projectKey=superuart-frontend
+            -Dsonar.projectName=SuperUART Frontend
+            -Dsonar.sources=frontend/src/app,frontend/src/components,frontend/src/hooks,frontend/src/lib,frontend/src/providers,frontend/src/types
+            -Dsonar.tests=frontend/src
+            -Dsonar.exclusions=**/.next/**,**/node_modules/**,**/coverage/**,**/dist/**,**/*.lock,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
+            -Dsonar.test.inclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
+            -Dsonar.coverage.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/*.d.ts
+            -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
+            -Dsonar.qualitygate.wait=true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Check frontend Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
     needs:
-      - frontend-test
+      - sonar-frontend
     defaults:
       run:
         working-directory: frontend
@@ -170,95 +258,18 @@ jobs:
       - name: Build frontend
         run: bun run build
 
-  sonarqube:
-    name: SonarQube
-    runs-on: ubuntu-latest
-    needs:
-      - backend-test
-      - frontend-test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download backend coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend
-
-      - name: Download frontend coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend/coverage
-
-      - name: Scan with SonarQube
-        uses: SonarSource/sonarqube-scan-action@v5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: Check SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-  release-metadata:
-    name: Release metadata
-    runs-on: ubuntu-latest
-    outputs:
-      commit_sha: ${{ steps.release.outputs.commit_sha }}
-      image_tag: ${{ steps.release.outputs.image_tag }}
-      target_branch: ${{ steps.release.outputs.target_branch }}
-    steps:
-      - name: Resolve release metadata
-        id: release
-        env:
-          COMMIT_SHA: ${{ github.sha }}
-          TARGET_BRANCH: ${{ github.ref_name }}
-        run: |
-          SHORT_SHA="${COMMIT_SHA::7}"
-          {
-            echo "commit_sha=${COMMIT_SHA}"
-            echo "image_tag=sha-${SHORT_SHA}"
-            echo "target_branch=${TARGET_BRANCH}"
-          } >> "${GITHUB_OUTPUT}"
-
-  publish-images:
-    name: Publish ${{ matrix.name }} image
+  docker-build-backend:
+    name: Docker build backend
     runs-on: ubuntu-latest
     needs:
       - backend-build
-      - frontend-build
-      - sonarqube
-      - release-metadata
-    if: (github.event_name == 'workflow_dispatch' && github.ref_type == 'branch') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: frontend
-            context: ./frontend
-            file: ./frontend/Dockerfile
-            target: runner
-            image: ghcr.io/${{ github.repository_owner }}/superuart/frontend
-          - name: backend
-            context: ./backend
-            file: ./backend/Dockerfile
-            target: production
-            image: ghcr.io/${{ github.repository_owner }}/superuart/backend
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.release-metadata.outputs.commit_sha }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -271,69 +282,70 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ matrix.image }}
+          images: ghcr.io/${{ github.repository_owner }}/superuart/backend
           tags: |
-            type=raw,value=${{ needs.release-metadata.outputs.image_tag }}
+            type=ref,event=tag
 
-      - name: Build and push ${{ matrix.name }}
+      - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          target: ${{ matrix.target }}
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: production
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  update-k8s-manifests:
-    name: Update Kubernetes manifests
+  docker-build-frontend:
+    name: Docker build frontend
     runs-on: ubuntu-latest
     needs:
-      - release-metadata
-      - publish-images
-    if: needs.publish-images.result == 'success'
+      - frontend-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: write
+      contents: read
+      packages: write
     steps:
-      - name: Checkout target branch
+      - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          ref: ${{ needs.release-metadata.outputs.target_branch }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update image tags in Kubernetes manifests
-        env:
-          IMAGE_TAG: ${{ needs.release-metadata.outputs.image_tag }}
-          BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/superuart/backend:${{ needs.release-metadata.outputs.image_tag }}
-          FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/superuart/frontend:${{ needs.release-metadata.outputs.image_tag }}
-        run: |
-          sed -i -E "s#image: ghcr\.io/[^/]+/superuart/backend:[^[:space:]]+#image: ${BACKEND_IMAGE}#g" k8s/deployment.yaml k8s/migrate.yaml
-          sed -i -E "s#image: ghcr\.io/[^/]+/superuart/frontend:[^[:space:]]+#image: ${FRONTEND_IMAGE}#g" k8s/deployment.yaml
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/superuart/frontend
+          tags: |
+            type=ref,event=tag
 
-          git diff -- k8s/deployment.yaml k8s/migrate.yaml
-
-          if git diff --quiet -- k8s/deployment.yaml k8s/migrate.yaml; then
-            echo "Kubernetes manifests already use ${IMAGE_TAG}; nothing to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add k8s/deployment.yaml k8s/migrate.yaml
-          git commit -m "chore(gitops): deploy ${IMAGE_TAG} [skip ci]"
-          git push origin "HEAD:${{ needs.release-metadata.outputs.target_branch }}"
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: runner
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   notify:
     name: Telegram notification
     runs-on: ubuntu-latest
     needs:
       - backend-test
+      - sonar-backend
       - backend-build
       - frontend-test
+      - sonar-frontend
       - frontend-build
-      - sonarqube
-      - release-metadata
-      - publish-images
-      - update-k8s-manifests
+      - docker-build-backend
+      - docker-build-frontend
     if: always()
     steps:
       - name: Send workflow status

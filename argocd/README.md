@@ -31,23 +31,26 @@ kubectl apply -f argocd/root-application.yaml
 
 Git является source of truth: Argo CD применяет только то состояние, которое записано в Git-манифестах.
 
-Поток релиза:
+Поток проверки и публикации:
 
-1. Workflow `CI` проверяет backend/frontend и SonarQube Quality Gate.
-2. После успешных проверок `CI` публикует backend/frontend образы в GHCR. Автоматически это происходит на `main`; ручной запуск ожидает branch-ref.
-3. Для обоих образов используется общий тег `sha-<short commit SHA>`.
-4. `CI` обновляет этот тег в `k8s/deployment.yaml` и `k8s/migrate.yaml`.
-5. `CI` коммитит изменение Kubernetes-манифестов обратно в целевую ветку.
-6. Argo CD видит новый commit в Git и синхронизирует приложение.
+1. `backend-test` запускает backend tests и формирует `backend/coverage.xml`.
+2. `sonar-backend` отправляет backend-анализ в SonarQube и проверяет Quality Gate.
+3. `backend-build` собирает backend package.
+4. `frontend-test` запускает frontend tests и формирует `frontend/coverage/lcov.info`.
+5. `sonar-frontend` отправляет frontend-анализ в SonarQube и проверяет Quality Gate.
+6. `frontend-build` собирает frontend.
+7. При push тега `docker-build-backend` публикует backend image в GHCR.
+8. При push тега `docker-build-frontend` публикует frontend image в GHCR.
+9. `notify` отправляет общий статус workflow.
 
-Обновляемые образы:
+Docker images публикуются только на tag push. Тег Docker image совпадает с Git tag:
 
 ```text
-ghcr.io/webserialsys/superuart/backend:sha-<short-sha>
-ghcr.io/webserialsys/superuart/frontend:sha-<short-sha>
+ghcr.io/webserialsys/superuart/backend:<git-tag>
+ghcr.io/webserialsys/superuart/frontend:<git-tag>
 ```
 
-Один и тот же тег используется для backend и frontend, потому что они собираются как единый релиз из одного commit.
+Argo CD не следит за registry. Чтобы новая версия стала desired state, image tag должен быть записан в `k8s/deployment.yaml` и `k8s/migrate.yaml` и закоммичен в Git.
 
 ## Проверка
 
@@ -63,6 +66,5 @@ kubectl get pods -n default
 
 - Argo CD Image Updater не используется.
 - Новая публикация образа в GHCR без commit в `k8s/` не меняет desired state.
-- Auto-commit из GitHub Actions требует `contents: write` для `GITHUB_TOKEN`.
-- Ручной release-запуск нужно делать из ветки, потому что workflow коммитит обновленные манифесты обратно в эту же ветку.
-- Если целевая ветка защищена и запрещает push от `github-actions[bot]`, коммит манифестов нужно разрешить правилами branch protection или выполнять через отдельный token.
+- Docker images публикуются только при push Git tag.
+- Argo CD Image Updater не используется, поэтому registry сам не меняет Kubernetes-манифесты.
