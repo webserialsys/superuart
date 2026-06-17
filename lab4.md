@@ -127,24 +127,92 @@ Workflow не применяет Kubernetes-манифесты и не обра�
 
 ## Argo CD
 
-Argo CD устанавливается в Kubernetes-кластер:
+Краткая последовательность команд для запуска в Minikube:
+
+### 1. Поднять Minikube
+
+```bash
+minikube delete
+minikube start --driver=kvm2 --cpus=6 --memory=8192 --disk-size=15g
+minikube addons enable ingress
+minikube addons enable metrics-server
+```
+
+### 2. Создать secret для приватных образов GHCR
+
+```bash
+export GHCR_USERNAME="<github-username>"
+export GHCR_TOKEN="<github-token-with-read-packages>"
+```
+
+```bash
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username="$GHCR_USERNAME" \
+  --docker-password="$GHCR_TOKEN"
+```
+
+### 3. Установить Argo CD в кластер
 
 ```bash
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 kubectl rollout status deployment/argocd-server -n argocd
+kubectl rollout status deployment/argocd-repo-server -n argocd
+kubectl rollout status deployment/argocd-application-controller -n argocd
+kubectl rollout status deployment/argocd-applicationset-controller -n argocd
 ```
 
-Открыть UI локально:
+### 4. Подключить GitOps-манифесты проекта
+
+Для app-of-apps варианта:
 
 ```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl apply -f argocd/root-application.yaml
+```
+
+Минимальный вариант без root application:
+
+```bash
+kubectl apply -f argocd/cmd-params.yaml
+kubectl apply -f argocd/ingress.yaml
+kubectl apply -f argocd/project.yaml
+kubectl apply -f argocd/application-superuart.yaml
+kubectl rollout restart deployment/argocd-server -n argocd
+kubectl rollout status deployment/argocd-server -n argocd
+```
+
+После этого `kubectl apply -f k8s/` делать не нужно: Argo CD сам подтянет папку `k8s/` из Git.
+Для варианта с `root-application.yaml` перезапуск `argocd-server` нужно делать после того, как root application применит `cmd-params.yaml`.
+
+### 5. Проверить, что Argo CD поднялся и синхронизировал приложение
+
+```bash
+kubectl get pods -n argocd
+kubectl get applications.argoproj.io -n argocd
+kubectl describe application superuart-root -n argocd
+kubectl describe application superuart -n argocd
+kubectl get pods -n default
+kubectl get svc -n default
+```
+
+Если использовался `argocd/root-application.yaml`, после первой синхронизации перезапустите `argocd-server`:
+
+```bash
+kubectl rollout restart deployment/argocd-server -n argocd
+kubectl rollout status deployment/argocd-server -n argocd
+```
+
+### 6. Открыть UI через Ingress
+
+```bash
+kubectl get ingress -n argocd argocd-server
 ```
 
 Адрес:
 
 ```text
-https://127.0.0.1:8080
+http://$(minikube ip)/argocd
 ```
 
 Получить стартовый пароль:
@@ -154,9 +222,18 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d
 ```
 
+Если приложение не появилось сразу, обычно достаточно подождать несколько секунд и повторить:
+
+```bash
+kubectl get applications.argoproj.io -n argocd
+kubectl get pods -n argocd
+```
+
 GitOps-конфигурация Argo CD разнесена на несколько файлов:
 
 ```text
+argocd/cmd-params.yaml
+argocd/ingress.yaml
 argocd/project.yaml
 argocd/application-superuart.yaml
 argocd/root-application.yaml
@@ -166,6 +243,8 @@ argocd/root-application.yaml
 
 | Файл | Назначение |
 |---|---|
+| `argocd/cmd-params.yaml` | Переводит `argocd-server` в insecure mode и настраивает работу UI под префиксом `/argocd` |
+| `argocd/ingress.yaml` | Отдельный `Ingress` в namespace `argocd`, который публикует Argo CD UI по пути `/argocd` |
 | `argocd/project.yaml` | `AppProject`, который явно разрешает репозиторий `https://github.com/webserialsys/superuart.git`, namespace `default` и нужные Kubernetes ресурсы |
 | `argocd/application-superuart.yaml` | `Application`, который следит за папкой `k8s/` и синхронизирует приложение в кластер |
 | `argocd/root-application.yaml` | Root application для app-of-apps подхода: следит за папкой `argocd/` и применяет Argo CD объекты из Git |
@@ -173,8 +252,11 @@ argocd/root-application.yaml
 Минимальный вариант применения:
 
 ```bash
+kubectl apply -f argocd/cmd-params.yaml
+kubectl apply -f argocd/ingress.yaml
 kubectl apply -f argocd/project.yaml
 kubectl apply -f argocd/application-superuart.yaml
+kubectl rollout restart deployment/argocd-server -n argocd
 ```
 
 Вариант app-of-apps:
@@ -183,8 +265,9 @@ kubectl apply -f argocd/application-superuart.yaml
 kubectl apply -f argocd/root-application.yaml
 ```
 
-После применения root application Argo CD следит за папкой `argocd/`, создает проект и дочернее приложение `superuart`.
+После применения root application Argo CD следит за папкой `argocd/`, создает ingress и дочернее приложение `superuart`.
 Дочернее приложение `superuart` следит за папкой `k8s/` в Git-репозитории и синхронизирует Kubernetes-манифесты в namespace `default`.
+После первой синхронизации root application нужно один раз перезапустить `argocd-server`, чтобы он подхватил `cmd-params.yaml`.
 
 В `application-superuart.yaml` включена автоматическая синхронизация:
 

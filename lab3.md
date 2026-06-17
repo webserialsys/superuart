@@ -41,7 +41,7 @@
 ```bash
 minikube delete
 minikube start --driver=kvm2 --cpus=6 --memory=8192 --disk-size=15g
-minikube addons enable ingress
+minikube addons enable ingress --images='ingress-nginx/controller:v1.14.3'
 minikube addons enable metrics-server
 ```
 

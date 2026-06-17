@@ -6,6 +6,8 @@
 
 | Файл | Назначение |
 |---|---|
+| `cmd-params.yaml` | Настраивает `argocd-server` на insecure mode и работу под префиксом `/argocd` |
+| `ingress.yaml` | Публикует Argo CD UI через `Ingress` по пути `/argocd` |
 | `project.yaml` | Ограничивает Argo CD проектом `superuart`: разрешенный Git-репозиторий, namespace `default` и нужные Kubernetes kind'ы |
 | `application-superuart.yaml` | Основное приложение Argo CD, которое синхронизирует папку `k8s/` в кластер |
 | `root-application.yaml` | Root application для app-of-apps подхода: синхронизирует саму папку `argocd/` |
@@ -15,8 +17,11 @@
 Минимальный вариант для демонстрации:
 
 ```bash
+kubectl apply -f argocd/cmd-params.yaml
+kubectl apply -f argocd/ingress.yaml
 kubectl apply -f argocd/project.yaml
 kubectl apply -f argocd/application-superuart.yaml
+kubectl rollout restart deployment/argocd-server -n argocd
 ```
 
 App-of-apps вариант:
@@ -25,7 +30,19 @@ App-of-apps вариант:
 kubectl apply -f argocd/root-application.yaml
 ```
 
-После применения root application Argo CD сам подтянет `project.yaml` и `application-superuart.yaml` из Git.
+После применения root application Argo CD сам подтянет `cmd-params.yaml`, `ingress.yaml`, `project.yaml` и `application-superuart.yaml` из Git.
+После первой синхронизации root application один раз перезапустите `argocd-server`, чтобы он подхватил `cmd-params.yaml`:
+
+```bash
+kubectl rollout restart deployment/argocd-server -n argocd
+kubectl rollout status deployment/argocd-server -n argocd
+```
+
+UI будет доступен через ingress:
+
+```text
+http://$(minikube ip)/argocd
+```
 
 ## Release flow
 
