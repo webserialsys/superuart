@@ -16,7 +16,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: backend
-          image: ghcr.io/webserialsys/superuart/backend:sha-817c32d
+          image: ghcr.io/webserialsys/superuart/backend:v0.1.5
           imagePullPolicy: Always
           args:
             - sh
@@ -80,7 +80,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend
-          image: ghcr.io/webserialsys/superuart/frontend:sha-817c32d
+          image: ghcr.io/webserialsys/superuart/frontend:v0.1.5
           imagePullPolicy: Always
           env:
             - name: NEXT_PUBLIC_API_BASE_URL
@@ -120,7 +120,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: worker
-          image: ghcr.io/webserialsys/superuart/backend:sha-817c32d
+          image: ghcr.io/webserialsys/superuart/backend:v0.1.5
           imagePullPolicy: Always
           env:
             - name: RUN_MIGRATIONS
