@@ -8,7 +8,6 @@ from urllib.request import Request, urlopen
 
 
 JOB_NAMES = {
-    "devops-test": "DevOps tests",
     "backend-test": "Backend test",
     "sonar-backend": "SonarQube backend",
     "backend-build": "Backend build",
