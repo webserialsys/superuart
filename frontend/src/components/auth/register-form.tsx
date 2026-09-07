@@ -117,8 +117,8 @@ export function RegisterForm() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Role</Label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium leading-none">Role</legend>
             <div className="grid grid-cols-2 gap-2">
               <label
                 className={cn(
@@ -136,7 +136,7 @@ export function RegisterForm() {
                   onChange={() => setRole("student")}
                   className="sr-only"
                 />
-                Student
+                <span>Student</span>
               </label>
               <label
                 className={cn(
@@ -154,10 +154,10 @@ export function RegisterForm() {
                   onChange={() => setRole("teacher")}
                   className="sr-only"
                 />
-                Teacher
+                <span>Teacher</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

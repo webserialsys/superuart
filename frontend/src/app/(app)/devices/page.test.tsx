@@ -219,10 +219,11 @@ describe("DevicesPage", () => {
     render(<DevicesPage />);
 
     await screen.findByText("Lab Board");
-    const toggle = screen.getByRole("checkbox");
+    const toggle = screen.getByRole("checkbox", { name: "Enable Lab Board" });
     expect(toggle).not.toBeChecked();
 
-    await user.click(toggle);
+    toggle.focus();
+    await user.keyboard(" ");
 
     await waitFor(() => {
       expect(updateDeviceMock).toHaveBeenCalledWith("token-1", "device-a", { is_enabled: true });

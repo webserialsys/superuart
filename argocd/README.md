@@ -41,7 +41,7 @@ Git является source of truth: Argo CD применяет только т
 6. `frontend-build` собирает frontend.
 7. При push тега `docker-build-backend` публикует backend image в GHCR.
 8. При push тега `docker-build-frontend` публикует frontend image в GHCR.
-9. `notify` отправляет общий статус workflow.
+9. `notify` отправляет общий итог и название/статус каждой job, включая пропущенные и отменённые. Статус синхронизации Argo CD проверяется отдельно.
 
 Docker images публикуются только на tag push. Тег Docker image совпадает с Git tag:
 
@@ -68,3 +68,31 @@ kubectl get pods -n default
 - Новая публикация образа в GHCR без commit в `k8s/` не меняет desired state.
 - Docker images публикуются только при push Git tag.
 - Argo CD Image Updater не используется, поэтому registry сам не меняет Kubernetes-манифесты.
+
+## Порядок синхронизации
+
+Синхронизация проходит в фазе `Sync` по волнам:
+
+1. Волна `-2`: конфигурация, секрет приложения, PVC, PostgreSQL и Redis с их сервисами. Argo CD ждёт готовности БД.
+2. Волна `-1`: Job `migrate` выполняет Alembic-миграции. Это `Sync` hook с `BeforeHookCreation`: перед следующим запуском старая Job пересоздаётся, поэтому изменение image не упирается в неизменяемое поле `Job.spec.template`. Последняя Job сохраняется для просмотра логов. Лимит выполнения — 10 минут.
+3. Волна `0`: backend, worker, frontend и мониторинг. Новая версия приложения не выкатывается при ошибке миграции. Frontend имеет readiness/liveness probes на `/api/healthz`.
+
+Миграция запускается при каждой полной синхронизации, поэтому должна оставаться идемпотентной (`alembic upgrade head`). Используется `Sync`, поскольку при первом развёртывании `PreSync` запустился бы до создания БД и её настроек. Не используйте выборочную синхронизацию отдельных ресурсов для релиза: она пропускает hooks.
+
+Число реплик backend контролирует HPA. Для `/spec/replicas` задано точечное `ignoreDifferences` вместе с `RespectIgnoreDifferences=true`, чтобы Argo CD не возвращал масштабирование к одной реплике. Остальные изменения backend продолжают исправляться через self-heal.
+
+Неиспользуемые ресурсы удаляются в конце синхронизации (`PruneLast=true`). При временной ошибке предусмотрены 5 повторов с увеличением интервала.
+
+## Проверка обновления
+
+Перед первой синхронизацией создайте в namespace `default` секреты `ghcr-secret` и `grafana-admin` согласно `MINIKUBE.md` и `MONITORING.md`. Они не создаются этими манифестами.
+
+1. Опубликуйте оба образа через push Git-тега и дождитесь успешных Docker jobs.
+2. Запишите опубликованный тег во все четыре ссылки image: backend, worker и frontend в `k8s/deployment.yaml`, а также миграция в `k8s/migrate.yaml`. Закоммитьте изменение в `main`.
+3. Дождитесь автоматической синхронизации `superuart` (либо выполните полную `argocd app sync superuart`).
+4. Проверьте `kubectl logs job/migrate`, затем `argocd app wait superuart --sync --health --timeout 600`.
+5. Запустите нагрузочный тест и убедитесь, что HPA увеличивает число подов, а Argo CD сохраняет состояние `Synced`.
+
+Ожидаемый результат проверки сбоя миграции: `SyncFailed`, логи ошибки в Job, новые Deployment не применены. После исправления выполните полную синхронизацию повторно.
+
+Справка: [Sync phases and waves](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/), [Sync options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/).

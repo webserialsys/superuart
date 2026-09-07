@@ -736,7 +736,7 @@ export default function HostsPage() {
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label>Devices on host</Label>
+              <p className="text-sm font-medium leading-none">Devices on host</p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
