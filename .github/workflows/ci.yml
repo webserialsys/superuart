@@ -12,6 +12,7 @@ on:
       - "backend/sonar-project.properties"
       - "frontend/sonar-project.properties"
       - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
   pull_request:
     paths:
       - "backend/**"
@@ -19,6 +20,7 @@ on:
       - "backend/sonar-project.properties"
       - "frontend/sonar-project.properties"
       - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 jobs:
@@ -124,7 +126,7 @@ jobs:
           projectBaseDir: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || secrets.SONAR_HOST_URL }}
 
       - name: Check backend Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
@@ -133,7 +135,7 @@ jobs:
           scanMetadataReportFile: backend/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || secrets.SONAR_HOST_URL }}
 
   backend-build:
     name: Backend build
@@ -212,7 +214,7 @@ jobs:
           projectBaseDir: frontend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || secrets.SONAR_HOST_URL }}
 
       - name: Check frontend Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
@@ -221,7 +223,7 @@ jobs:
           scanMetadataReportFile: frontend/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || secrets.SONAR_HOST_URL }}
 
   frontend-build:
     name: Frontend build
@@ -336,21 +338,15 @@ jobs:
       - docker-build-frontend
     if: always()
     steps:
-      - name: Send workflow status
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Send job statuses
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RESULT: ${{ contains(needs.*.result, 'failure') && 'failed' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'passed' }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
           BRANCH: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
-            echo "Telegram secrets are not configured, skipping notification."
-            exit 0
-          fi
-          SHORT_SHA="${COMMIT_SHA::7}"
-          TEXT="SuperUART CI ${RESULT}%0ABranch: ${BRANCH}%0ACommit: ${SHORT_SHA}%0A${RUN_URL}"
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="${TEXT}"
+        run: python3 .github/scripts/notify_telegram.py

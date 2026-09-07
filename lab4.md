@@ -37,9 +37,8 @@ admin / admin
 
 1. Создать проекты `superuart-backend` и `superuart-frontend` либо выдать token с правом создавать проекты при первом сканировании.
 2. Создать token для GitHub Actions.
-3. Добавить в GitHub Secrets:
-   - `SONAR_TOKEN`;
-   - `SONAR_HOST_URL`, например `http://<vm-ip>:9000`.
+3. Добавить `SONAR_TOKEN` в GitHub Secrets.
+4. Добавить `SONAR_HOST_URL` в GitHub Variables, например `http://<vm-ip>:9000`. Workflow также поддерживает этот адрес в Secrets для совместимости. Адрес должен быть доступен с GitHub runner; `localhost` подходит только для локального анализа.
 
 Конфигурация анализа лежит в `sonar-project.properties`.
 
@@ -88,7 +87,8 @@ Workflow `CI` теперь состоит из отдельных jobs:
 | `Frontend build` | Собирает Next.js frontend |
 | `Docker build backend` | На push тега собирает и публикует backend image в GHCR |
 | `Docker build frontend` | На push тега собирает и публикует frontend image в GHCR |
-| `Telegram notification` | Отправляет статус workflow в Telegram |
+| `DevOps tests` | Проверяет формат уведомлений и обработку ошибок Telegram |
+| `Telegram notification` | Отправляет общий итог и название/статус каждой job в Telegram |
 
 Роль CI: проверить backend/frontend, собрать приложение и подтвердить качество кода через SonarQube. CI не разворачивает приложение в Kubernetes.
 
@@ -278,7 +278,8 @@ syncPolicy:
     selfHeal: true
   syncOptions:
     - CreateNamespace=true
-    - ApplyOutOfSyncOnly=true
+    - RespectIgnoreDifferences=true
+    - PruneLast=true
 ```
 
 - `selfHeal: true` возвращает ресурсы к состоянию из Git, если их поменяли руками в кластере.
@@ -344,12 +345,21 @@ TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 ```
 
-После этого workflow отправляет сообщение со статусом:
+После этого workflow отправляет одно сообщение с итогом, веткой, commit, ссылкой на GitHub Actions run и названием/статусом каждой job (`success`, `failure`, `cancelled`, `skipped`). Например:
 
-- branch;
-- commit;
-- success/failure/cancelled;
-- ссылка на GitHub Actions run.
+```text
+SuperUART CI: failure
+Branch: main
+Commit: abc1234
+
+Backend test: success
+SonarQube backend: failure
+Backend build: skipped
+```
+
+В полном сообщении перечислены все jobs из `needs`, включая frontend и Docker jobs. Telegram API получает JSON, поэтому переносы строк и специальные символы сохраняются. Ошибка HTTP или ответ `ok: false` завершает job уведомления ошибкой. Если секреты не настроены, выводится предупреждение и отправка пропускается.
+
+Синхронизация Argo CD выполняется независимо от GitHub Actions; её статус это сообщение не отражает. Порядок миграций, поведение HPA и проверка деплоя описаны в `argocd/README.md`.
 
 ## Что показать на защите
 

@@ -2,9 +2,11 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, ...props }, ref) => (
+const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, children, ...props }, ref) => (
   <div className="relative w-full overflow-x-auto">
-    <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+    <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props}>
+      {children}
+    </table>
   </div>
 ));
 Table.displayName = "Table";
@@ -27,8 +29,8 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <th ref={ref} className={cn("h-11 px-4 text-left align-middle font-medium text-muted-foreground", className)} {...props} />
+  ({ className, scope = "col", ...props }, ref) => (
+    <th ref={ref} scope={scope} className={cn("h-11 px-4 text-left align-middle font-medium text-muted-foreground", className)} {...props} />
   ),
 );
 TableHead.displayName = "TableHead";

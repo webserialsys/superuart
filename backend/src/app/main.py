@@ -18,7 +18,7 @@ from .core.setup import create_application, lifespan_factory
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Custom lifespan that includes admin initialization."""
-    # Get the default lifespan
+    # Get the default lifespann
     default_lifespan = lifespan_factory(settings, create_tables_on_start=False)
 
     # Run the default lifespan initialization and our admin initialization

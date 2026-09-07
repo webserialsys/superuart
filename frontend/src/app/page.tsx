@@ -36,7 +36,7 @@ export default function HomePage() {
         <div className="flex flex-wrap gap-3">
           <Button asChild>
             <Link href="/login">
-              Open workspace
+              Open workspacee
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>

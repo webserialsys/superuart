@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -18,6 +18,8 @@ type ModalProps = {
 
 export function Modal({ open, onClose, title, description, children, className }: ModalProps) {
   const [isMounted, setIsMounted] = useState(false);
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     setIsMounted(true);
@@ -55,22 +57,28 @@ export function Modal({ open, onClose, title, description, children, className }
 
   return createPortal(
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 h-full w-full overflow-y-auto px-4 py-6 sm:px-8 sm:py-10">
+      <button
+        type="button"
+        className="absolute inset-0 h-full w-full cursor-default bg-slate-950/60 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close modal backdrop"
+      />
+      <div className="pointer-events-none relative z-10 h-full w-full overflow-y-auto px-4 py-6 sm:px-8 sm:py-10">
         <div
           className={cn(
-            "mx-auto w-full max-w-4xl rounded-2xl border border-border/60 bg-card/95 p-6 shadow-2xl",
+            "pointer-events-auto mx-auto w-full max-w-4xl rounded-2xl border border-border/60 bg-card/95 p-6 shadow-2xl",
             className,
           )}
-          onClick={(event) => event.stopPropagation()}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={description ? descriptionId : undefined}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold">{title}</h3>
+              <h3 id={titleId} className="text-lg font-semibold">{title}</h3>
               {description ? (
-                <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">{description}</p>
               ) : null}
             </div>
             <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close modal">

@@ -360,6 +360,7 @@ export default function DevicesPage() {
                       <TableCell>
                         {canManage ? (
                           <label className="relative inline-flex cursor-pointer items-center">
+                            <span className="sr-only">Enable {device.name}</span>
                             <input
                               type="checkbox"
                               className="peer sr-only"
@@ -367,7 +368,7 @@ export default function DevicesPage() {
                               disabled={Boolean(togglingDevices[device.uuid])}
                               onChange={(event) => void handleToggleDeviceEnabled(device, event.target.checked)}
                             />
-                            <span className="h-6 w-11 rounded-full bg-muted transition peer-checked:bg-emerald-600" />
+                            <span className="h-6 w-11 rounded-full bg-muted transition peer-checked:bg-emerald-600 peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2" />
                             <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
                           </label>
                         ) : (

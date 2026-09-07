@@ -2,7 +2,12 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
+  activeDeadlineSeconds: 600
   backoffLimit: 6
   template:
     spec:

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,7 +27,7 @@ describe("Modal", () => {
       </Modal>,
     );
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Settings" })).toHaveAccessibleDescription("Panel");
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Panel")).toBeInTheDocument();
     expect(screen.getByText("body")).toBeInTheDocument();
@@ -48,13 +48,27 @@ describe("Modal", () => {
 
     await screen.findByRole("dialog");
 
-    const fixedRoot = document.querySelector(".fixed.inset-0.z-50") as HTMLElement;
-    const backdrop = fixedRoot.firstElementChild as HTMLElement;
-    fireEvent.click(backdrop);
+    await user.click(screen.getByRole("button", { name: "Close modal backdrop" }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: /close modal/i }));
+    await user.click(screen.getByRole("button", { name: "Close modal" }));
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not close when content is clicked and supports keyboard dismissal", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <Modal open onClose={onClose} title="Settings">
+        <button type="button">Save settings</button>
+      </Modal>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Save settings" }));
+    expect(onClose).not.toHaveBeenCalled();
+    screen.getByRole("button", { name: "Close modal backdrop" }).focus();
+    await user.keyboard("{Enter}");
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("locks body scroll while open and restores it on unmount", async () => {
