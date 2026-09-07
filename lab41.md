@@ -1,11 +1,3 @@
-sudo brew services start socket_vmnet
-vm_interface=$(ip -4 route show default | awk 'NR == 1 {print $5}')
-echo "$vm_interface"
-
-sudo resolvectl dns "$vm_interface" 1.1.1.1 8.8.8.8
-sudo resolvectl domain "$vm_interface" '~.'
-sudo resolvectl flush-caches
-
 minikube delete
 
 minikube start --driver=docker --cpus=6
@@ -27,13 +19,17 @@ kubectl create secret docker-registry ghcr-secret \
 
 kubectl apply -f k8s/
 
-minikube ip
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.2/manifests/install.yaml
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d
 
-http://<MINIKUBE_IP>/
-http://<MINIKUBE_IP>/grafana/
+kubectl apply -f argocd/project.yaml
+kubectl apply -f argocd/application-superuart.yaml
+kubectl apply -f argocd/root-application.yaml
 
-kubectl -n argocd port-forward svc/argocd-server 8443:443
-https://127.0.0.1:8443
-
-kubectl port-forward svc/prometheus 9090:9090
-http://127.0.0.1:9090
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 --decode
+echo
